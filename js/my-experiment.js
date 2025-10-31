@@ -141,7 +141,7 @@ const jsPsych = initJsPsych({
         
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         // ★ ファイル名を変更 (学習データが含まれることを明示)
-        const filename = `summary_and_learning_trials_${safeInitials}_${timestamp}.csv`;
+        const filename = `${safeInitials}_${timestamp}.csv`;
 
         await saveCsvToServer(filename, csvData);
 
