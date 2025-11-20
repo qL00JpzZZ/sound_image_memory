@@ -1,3 +1,214 @@
+
+// -------------------- START: ADDED STUDY DESCRIPTION / CONSENT / WITHDRAWAL BLOCK --------------------
+// Edit STUDY_CONTACT near the top to change phone/email/name/address as needed.
+
+const STUDY_CONTACT = {
+  name: '樋口　洋子',
+  affiliation: '千葉工業大学 情報変革科学部 認知情報科学科',
+  address: '千葉県習志野市津田沼2-17-1',
+  phone: '047-478-0107',
+  email: 'higuchi.yoko@p.chibakoudai.jp'
+};
+
+// 1) 説明文書（目を通したら J キー。J 以外のキーは無視）
+const study_description_trial = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: function() {
+    return `
+      <div style="max-width: 900px; margin: 0 auto; line-height: 1.6; text-align: left;">
+        <h2 style="text-align:center;">実験説明書</h2>
+        <div style="display:flex; gap:16px; align-items:flex-start;">
+          <img src="scenes/Illustration.png" alt="Illustration" style="width:220px; height:auto; border:1px solid #ccc;"/>
+          <div style="flex:1;">
+            <p><strong>研究課題：</strong>見たり聞いたりすることでヒトが学ぶ仕組みの研究</p>
+            <p><strong>研究実施場所：</strong>千葉工業大学　情報変革科学部　認知情報科学科</p>
+            <p><strong>研究責任者：</strong>${STUDY_CONTACT.name}（${STUDY_CONTACT.affiliation}）</p>
+            <hr>
+            <p><strong>【研究目的】</strong></p>
+            <p>本研究では、ヒトが何度も見たり聞いたりする訓練を通じて、見え方や聞こえ方、感じ方、考え方がどのように変わり、その変化には脳のどのような仕組みが関わるか明らかにすることを目的として行われています。また、この実験は、個人の能力を検査するものではありません。</p>
+            <p><strong>【研究方法】</strong></p>
+            <p>実験室内の椅子に座り、ディスプレイに向かって課題を行っていただきます。行っていただく課題は、ディスプレイやスピーカー、イヤホンなどから提示される視聴覚刺激の種類の判別です。課題は小休止を挟みながら進行します。</p>
+            <p>（説明文書の全文は研究責任者が配布した文書に従ってください。）</p>
+          </div>
+        </div>
+        <hr>
+        <p style="text-align:center; font-size:1.1em;">この説明を読み終えたら、<strong>J キー</strong>を押してください。</p>
+      </div>
+    `;
+  },
+  choices: ['j'],
+  data: { task_phase: 'study_description' }
+};
+
+// 2) 同意書フォーム（チェックボックス・必須入力をすべて埋めたときのみ「次へ」ボタンで進む）
+const consent_form_html = `
+  <div style="max-width:900px; margin:0 auto; line-height:1.6; text-align:left;">
+    <h2 style="text-align:center;">研究参加同意書</h2>
+    <p>以下の項目をよく読み、当てはまる項目にチェック・必要事項の記入をお願いします。</p>
+    <form id="consent-form" autocomplete="off">
+      <div>
+        <label><input type="checkbox" name="purpose_confirm" required /> 研究目的・研究方法を理解しました。</label>
+      </div>
+      <div>
+        <label><input type="checkbox" name="condition_confirm" required /> 参加条件を満たしていることを確認しました。</label>
+      </div>
+      <div>
+        <label><input type="checkbox" name="withdraw_confirm" required /> いつでも実験を中断・同意撤回できることを理解しました。</label>
+      </div>
+      <div>
+        <label><input type="checkbox" name="privacy_confirm" required /> 個人情報の保護とデータ取り扱いに同意します。</label>
+      </div>
+      <div>
+        <label><input type="checkbox" name="publication_confirm" required /> 匿名化したデータが学術データベースに掲載される可能性を理解しました。</label>
+      </div>
+      <div>
+        <label><input type="checkbox" name="reward_confirm" required /> 謝礼・交通費について理解しました。</label>
+      </div>
+      <hr />
+      <div style="display:flex; gap:12px; flex-wrap:wrap;">
+        <div style="flex:1; min-width:200px;">
+          <label>フリガナ（任意）<br><input type="text" name="kana" placeholder="例：ヤマダ タロウ" /></label>
+        </div>
+        <div style="flex:1; min-width:120px;">
+          <label>年齢（必須）<br><input type="number" name="age" min="18" required /></label>
+        </div>
+        <div style="flex:1; min-width:120px;">
+          <label>性別（必須）<br>
+            <select name="sex" required>
+              <option value="">選択してください</option>
+              <option value="male">男</option>
+              <option value="female">女</option>
+              <option value="other">その他/回答しない</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div style="margin-top:12px;">
+        <label>連絡用 Email（任意）<br><input type="email" name="email" placeholder="example@example.com" /></label>
+      </div>
+      <div style="margin-top:12px;">
+        <label>署名（電子的に署名する場合は名前を入力してください）<br><input type="text" name="signature" placeholder="署名" required /></label>
+      </div>
+      <div style="margin-top:14px;">
+        <small>研究責任者・連絡先： ${STUDY_CONTACT.name} / 電話: ${STUDY_CONTACT.phone} / Email: ${STUDY_CONTACT.email}</small>
+      </div>
+      <div style="margin-top:18px; text-align:center;">
+        <button id="consent-next" type="button" disabled style="font-size:1.1em; padding:8px 20px;">次へ</button>
+      </div>
+    </form>
+  </div>
+`;
+
+const consent_form_trial = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: consent_form_html,
+  choices: "NO_KEYS",
+  data: { task_phase: 'consent_form' },
+  on_load: function() {
+    const display_element = jsPsych.getDisplayElement();
+    const form = display_element.querySelector('#consent-form');
+    const nextBtn = display_element.querySelector('#consent-next');
+
+    if (!form || !nextBtn) {
+      console.error('Consent form elements not found');
+      return;
+    }
+
+    function allRequiredFilled() {
+      // required checkboxes
+      const requiredCheckboxes = ['purpose_confirm','condition_confirm','withdraw_confirm','privacy_confirm','publication_confirm','reward_confirm'];
+      for (const name of requiredCheckboxes) {
+        const el = form.querySelector(`[name="${name}"]`);
+        if (!el || !el.checked) return false;
+      }
+      // required inputs
+      const age = form.querySelector('[name="age"]');
+      const sex = form.querySelector('[name="sex"]');
+      const signature = form.querySelector('[name="signature"]');
+      if (!age || age.value === '' ) return false;
+      if (!sex || sex.value === '' ) return false;
+      if (!signature || signature.value.trim() === '') return false;
+      return true;
+    }
+
+    function validateAndToggle() {
+      try {
+        nextBtn.disabled = !allRequiredFilled();
+      } catch (e) { console.error(e); nextBtn.disabled = true; }
+    }
+
+    form.addEventListener('change', validateAndToggle);
+    form.addEventListener('input', validateAndToggle);
+
+    nextBtn.addEventListener('click', function() {
+      if (!allRequiredFilled()) {
+        nextBtn.disabled = true; return;
+      }
+      // collect form data
+      const formData = new FormData(form);
+      const obj = {};
+      for (const [k,v] of formData.entries()) { obj[k] = v; }
+      // record the consent data into jsPsych data
+      jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj });
+      jsPsych.finishTrial();
+    });
+
+    // initial validation check
+    validateAndToggle();
+  }
+};
+
+// 3) 同意撤回連絡先画面（同様に J キーで進む）
+const withdrawal_info_trial = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: function() {
+    return `
+      <div style="max-width:900px; margin:0 auto; line-height:1.6; text-align:left;">
+        <h2 style="text-align:center;">同意撤回の連絡先</h2>
+        <p>実験結果の使用などについて同意を撤回したい場合は、下記の連絡先までご連絡ください。</p>
+        <p><strong>連絡先：</strong><br>${STUDY_CONTACT.name}（${STUDY_CONTACT.affiliation}）<br>${STUDY_CONTACT.address}<br>電話: ${STUDY_CONTACT.phone}<br>Email: ${STUDY_CONTACT.email}</p>
+        <hr>
+        <p style="text-align:center; font-size:1.1em;">この説明を読み終えたら、<strong>J キー</strong>を押してください。</p>
+      </div>
+    `;
+  },
+  choices: ['j'],
+  data: { task_phase: 'withdrawal_info' }
+};
+
+// Insert the trials at the start of an existing global 'timeline' array.
+// If timeline isn't defined yet, poll for a short time and insert when ready.
+function insertConsentAndDescriptionAtTimelineStart() {
+  try {
+    if (typeof timeline === 'undefined' || !Array.isArray(timeline)) {
+      console.warn('Global timeline not found yet. Will retry after a short delay.');
+      return false;
+    }
+    // insert in order: description -> consent -> withdrawal -> (existing first trial...)
+    timeline.unshift(withdrawal_info_trial);
+    timeline.unshift(consent_form_trial);
+    timeline.unshift(study_description_trial);
+
+    console.log('Inserted description, consent, and withdrawal trials at start of timeline.');
+    return true;
+  } catch (e) {
+    console.error('Failed to insert trials into timeline:', e);
+    return false;
+  }
+}
+
+(function waitForTimelineAndInsert() {
+  if (insertConsentAndDescriptionAtTimelineStart()) return;
+  let attempts = 0;
+  const interval = setInterval(() => {
+    attempts++;
+    if (insertConsentAndDescriptionAtTimelineStart() || attempts > 50) { clearInterval(interval); if (attempts>50) console.warn('Could not insert trials automatically. You may need to manually add the three trials to the start of your timeline.'); }
+  }, 100);
+})();
+
+// -------------------- END: ADDED STUDY DESCRIPTION / CONSENT / WITHDRAWAL BLOCK --------------------
+
+
 // -------------------- ヘルパー関数 --------------------
 // ファイル名に使えない文字を置換・削除する
 function sanitizeFileNamePart(s) {
