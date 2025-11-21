@@ -1,17 +1,202 @@
 // -------------------- 連絡先・個人情報設定 (ここを書き換えてください) --------------------
 const STUDY_CONTACT = {
-  name: '樋口洋子', // 研究責任者の氏名
+  name: '樋口　洋子', // 研究責任者の氏名
   affiliation: '千葉工業大学 情報変革科学部 認知情報科学科',
   address: '千葉県習志野市津田沼2-17-1',
   phone: '047-478-0107', // 電話番号
   email: 'higuchi.yoko@p.chibakoudai.jp' // メールアドレス
 };
 
-// -------------------- ヘルパー関数 --------------------
+// -------------------- HELPER FUNCTIONS FOR ID GENERATION --------------------
+
+// ★★★ 999, 998, 997, 996, 995 を除外するための定数リスト ★★★
+const EXCLUDED_NUMS = [999, 998, 997, 996, 995];
+
+// ★★★ 新しいID生成ロジック ★★★
+// 000〜999の中から、EXCLUDED_NUMS に含まれない安全な3桁の数字をランダムに生成
+function generateSafe3Digit() {
+    let num;
+    do {
+        // 0から999までのランダムな整数を生成
+        num = Math.floor(Math.random() * 1000);
+    // 生成された数が EXCLUDED_NUMS に含まれる間、ループを継続
+    } while (EXCLUDED_NUMS.includes(num));
+
+    // 数字を文字列に変換し、先頭を '0' で埋めて3桁にする (例: 5 -> "005")
+    return String(num).padStart(3, '0');
+}
+
+// -------------------- ADDED STUDY DESCRIPTION / CONSENT / WITHDRAWAL BLOCK --------------------
+
+// 1) 説明文書（目を通したら J キー）
+const study_description_trial = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: function() {
+    return `
+    <div style="max-width: 900px; margin: 0 auto; line-height: 1.6; text-align: left; font-size: 16px;">
+      <h2 style="text-align:center;">実験説明書</h2>
+      <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom: 20px;">
+        <div style="flex:0 0 250px;">
+             <img src="scenes/Illustration.png" alt="Illustration" style="width:100%; height:auto; border:1px solid #ddd; padding:5px;"/>
+        </div>
+        <div style="flex:1;">
+          <p><strong>研究課題：</strong>見たり聞いたりすることでヒトが学ぶ仕組みの研究</p>
+          <p><strong>研究実施場所：</strong>${STUDY_CONTACT.affiliation}</p>
+          <p><strong>研究責任者：</strong>${STUDY_CONTACT.affiliation}<br>助教 ${STUDY_CONTACT.name}</p>
+          <hr>
+          <p><strong>【研究目的】</strong></p>
+          <p>本研究では、ヒトが何度も見たり聞いたりする訓練を通じて、見え方や聞こえ方、感じ方、考え方がどのように変わり、その変化には脳のどのような仕組みが関わるか明らかにすることを目的として行われています。また、この実験は、個人の能力を検査するものではありません。本実験への参加により予想される利益・不利益はありません。</p>
+          <p><strong>【研究方法】</strong></p>
+          <p>実験室内の椅子に座り、ディスプレイに向かって課題を行っていただきます。行っていただく課題は、ディスプレイやスピーカー、イヤホンなどから提示される視聴覚刺激の種類の判別です（左図参照）。マウスやキーボード等の操作、またはマイクへの発話による回答を行っていただきます。</p>
+          <p>課題は5〜10分ごとに小休止します。ご自身の判断で休憩を取りながら課題を行います。全ての測定に要する時間は、1回あたり最大2時間です。</p>
+        </div>
+      </div>
+      <hr>
+      <p style="text-align:center; font-size:1.1em; font-weight:bold;">この説明を読み終えたら、<span style="color:red;">J キー</span> を押して次へ進んでください。</p>
+    </div>
+    `;
+  },
+  choices: ['j'],
+  data: { task_phase: 'study_description' }
+};
+
+// 2) 同意書フォーム（チェックボックス・入力必須、次へボタンで遷移）
+const consent_form_html = `
+  <div style="max-width:800px; margin:0 auto; line-height:1.6; text-align:left; font-size:15px;">
+    <h2 style="text-align:center;">研究参加同意書</h2>
+    <p><strong>${STUDY_CONTACT.affiliation}<br>助教 ${STUDY_CONTACT.name} 殿</strong></p>
+    <p>私は以下の項目について確認し、本研究の参加に同意します。</p>
+    
+    <form id="consent-form" style="border:1px solid #ccc; padding:20px; border-radius:5px; background-color:#fff;">
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check1" required> 研究目的・研究方法</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check2" required> 参加条件（視力0.8以上、18歳以上等）</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check3" required> いつでも実験の中断や参加の同意を撤回できること</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check4" required> 個人情報の保護</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check5" required> 特定の個人を識別できない状態で測定データが公的データベースで公開される可能性があること</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check6" required> 謝礼・交通費</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check7" required> 知的財産の権利が自分にないこと</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check8" required> その他について</label></div>
+      <hr>
+      <div style="display:flex; gap:20px; margin-bottom:10px;">
+        <div style="flex:1;">
+          <label>フリガナ（必須）<br><input type="text" name="kana" required style="width:100%; padding:5px;"></label>
+        </div>
+        <div style="flex:1;">
+          <label>年齢（必須）<br><input type="number" name="age" min="18" required style="width:50%; padding:5px;"> 歳</label>
+        </div>
+        <div style="flex:1;">
+          <label>性別（必須）<br>
+            <select name="gender" required style="padding:5px;">
+              <option value="">選択してください</option>
+              <option value="male">男</option>
+              <option value="female">女</option>
+              <option value="other">その他/回答しない</option>
+            </select>
+          </label>
+        </div>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label>署名（必須：お名前を入力してください）<br><input type="text" name="signature" required style="width:100%; padding:5px;"></label>
+      </div>
+      <div style="margin-bottom:10px;">
+        <label>Email（必須）<br><input type="email" name="email" required style="width:100%; padding:5px;"></label>
+      </div>
+      <p style="font-size:0.9em; text-align:right;">署名日：${new Date().toLocaleDateString()}</p>
+      
+      <div style="text-align:center; margin-top:20px;">
+        <button type="button" id="btn-consent" disabled style="padding:10px 30px; font-size:1.2em; cursor:pointer;">次へ</button>
+      </div>
+    </form>
+  </div>
+`;
+
+const consent_form_trial = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: consent_form_html,
+  choices: "NO_KEYS", // キーボードでの進行を無効化
+  data: { task_phase: 'consent_form' },
+  on_load: function() {
+    const form = document.getElementById('consent-form');
+    const btn = document.getElementById('btn-consent');
+    
+    // 入力状態を監視してボタンの有効/無効を切り替え
+    const checkValidity = () => {
+      const isValid = form.checkValidity(); // 全てのrequiredが満たされているか
+      btn.disabled = !isValid;
+    };
+
+    form.addEventListener('change', checkValidity);
+    form.addEventListener('input', checkValidity);
+
+    // ボタンクリック時の処理
+    btn.addEventListener('click', function() {
+      if (!allRequiredFilled()) {
+        btn.disabled = true; return;
+      }
+      // collect form data
+      const formData = new FormData(form);
+      const obj = {};
+      for (const [k,v] of formData.entries()) { obj[k] = v; }
+      // record the consent data into jsPsych data
+      jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj });
+      jsPsych.finishTrial();
+    });
+
+    // initial validation check
+    checkValidity(); // 関数名修正
+  }
+};
+
+// 3) 同意撤回連絡先画面（同様に J キーで進む）
+const withdrawal_info_trial = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: function() {
+    return `
+      <div style="max-width: 800px; margin: 0 auto; line-height: 1.6; text-align: left;">
+        <h2 style="text-align:center;">実験の中断・同意の撤回について</h2>
+        <p>実験への参加は任意です。いつでも実験への参加を中断できます。また実験途中や実験後であっても同意を撤回することができます。同意撤回や実験の中断によって不利な扱いを受けることはありません。</p>
+        <p>同意撤回の意思が示されたときは、学会等の発表前であれば計測データ等は破棄します。</p>
+        <hr>
+        <p>もし実験結果の使用などに同意の撤回をしたい場合は、下記アドレスまで連絡してください。</p>
+        <div style="background-color:#f9f9f9; padding:20px; border-radius:5px; text-align:center;">
+          <p><strong>研究責任者：${STUDY_CONTACT.name}</strong></p>
+          <p>${STUDY_CONTACT.affiliation}</p>
+          <p>${STUDY_CONTACT.address}</p>
+          <p>電話：${STUDY_CONTACT.phone}</p>
+          <p>Email: <a href="mailto:${STUDY_CONTACT.email}">${STUDY_CONTACT.email}</a></p>
+        </div>
+        <hr>
+        <p style="text-align:center; font-size:1.1em; font-weight:bold;">内容を確認しましたら、<span style="color:red;">J キー</span> を押して実験を開始してください。</p>
+      </div>
+    `;
+  },
+  choices: ['j'],
+  data: { task_phase: 'withdrawal_info' }
+};
+
+// -------------------- HELPER FUNCTIONS FOR ID GENERATION --------------------
+
 // ファイル名に使えない文字を置換・削除する
 function sanitizeFileNamePart(s) {
   if (!s) return 'unknown';
   return String(s).trim().replace(/[,\/\\()?%#:*"|<>]/g, '_').replace(/\s+/g, '_').slice(0, 50);
+}
+
+// ★★★ 999, 998, 997, 996, 995 を除外するための定数リスト ★★★
+const EXCLUDED_NUMS = [999, 998, 997, 996, 995];
+
+// ★★★ 新しいID生成ロジック ★★★
+// 000〜999の中から、EXCLUDED_NUMS に含まれない安全な3桁の数字をランダムに生成
+function generateSafe3Digit() {
+    let num;
+    do {
+        // 0から999までのランダムな整数を生成
+        num = Math.floor(Math.random() * 1000);
+    // 生成された数が EXCLUDED_NUMS に含まれる間、ループを継続
+    } while (EXCLUDED_NUMS.includes(num));
+
+    // 数字を文字列に変換し、先頭を '0' で埋めて3桁にする (例: 5 -> "005")
+    return String(num).padStart(3, '0');
 }
 
 // -------------------- サーバー送信関数 --------------------
@@ -212,139 +397,6 @@ const jsPsych = initJsPsych({
 
 // -------------------- 各種試行の定義 --------------------
 
-// ▼▼▼ 1. 実験説明書（Jキーで遷移） ▼▼▼
-const study_description_trial = {
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: function() {
-    return `
-    <div style="max-width: 900px; margin: 0 auto; line-height: 1.6; text-align: left; font-size: 16px;">
-      <h2 style="text-align:center;">実験説明書</h2>
-      <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom: 20px;">
-        <div style="flex:0 0 250px;">
-             <img src="scenes/Illustration.png" alt="Illustration" style="width:100%; height:auto; border:1px solid #ddd; padding:5px;"/>
-        </div>
-        <div style="flex:1;">
-          <p><strong>研究課題：</strong>見たり聞いたりすることでヒトが学ぶ仕組みの研究</p>
-          <p><strong>研究実施場所：</strong>千葉工業大学　情報変革科学部　認知情報科学科</p>
-          <p><strong>研究責任者：</strong>${STUDY_CONTACT.affiliation}<br>助教 ${STUDY_CONTACT.name}</p>
-          <hr>
-          <p><strong>【研究目的】</strong></p>
-          <p>本研究では、ヒトが何度も見たり聞いたりする訓練を通じて、見え方や聞こえ方、感じ方、考え方がどのように変わり、その変化には脳のどのような仕組みが関わるか明らかにすることを目的として行われています。また、この実験は、個人の能力を検査するものではありません。本実験への参加により予想される利益・不利益はありません。</p>
-          <p><strong>【研究方法】</strong></p>
-          <p>実験室内の椅子に座り、ディスプレイに向かって課題を行っていただきます。行っていただく課題は、ディスプレイやスピーカー、イヤホンなどから提示される視聴覚刺激の種類の判別です（左図参照）。マウスやキーボード等の操作、またはマイクへの発話による回答を行っていただきます。</p>
-          <p>課題は5〜10分ごとに小休止します。ご自身の判断で休憩を取りながら課題を行います。全ての測定に要する時間は、1回あたり最大2時間です。</p>
-        </div>
-      </div>
-      <hr>
-      <p style="text-align:center; font-size:1.1em; font-weight:bold;">内容を確認しましたら、<span style="color:red;">J キー</span> を押して次へ進んでください。</p>
-    </div>`;
-  },
-  choices: ['j'],
-  data: { task_phase: 'study_description' }
-};
-
-// ▼▼▼ 2. 同意書（チェックボックス・入力必須、次へボタンで遷移） ▼▼▼
-const consent_form_trial = {
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: `
-  <div style="max-width:800px; margin:0 auto; line-height:1.6; text-align:left; font-size:15px;">
-    <h2 style="text-align:center;">研究参加同意書</h2>
-    <p><strong>${STUDY_CONTACT.affiliation}<br>助教 ${STUDY_CONTACT.name} 殿</strong></p>
-    <p>私は以下の項目について確認し、本研究の参加に同意します。</p>
-    
-    <form id="consent-form" style="border:1px solid #ccc; padding:20px; border-radius:5px; background-color:#fff;">
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check1" required> 研究目的・研究方法</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check2" required> 参加条件（視力0.8以上、18歳以上等）</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check3" required> いつでも実験の中断や参加の同意を撤回できること</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check4" required> 個人情報の保護</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check5" required> 特定の個人を識別できない状態で測定データが公的データベースで公開される可能性があること</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check6" required> 謝礼・交通費</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check7" required> 知的財産の権利が自分にないこと</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check8" required> その他について</label></div>
-      <hr>
-      <div style="display:flex; gap:20px; margin-bottom:10px;">
-        <div style="flex:1;">
-          <label>フリガナ（必須）<br><input type="text" name="kana" required style="width:100%; padding:5px;"></label>
-        </div>
-        <div style="flex:1;">
-          <label>年齢（必須）<br><input type="number" name="age" min="18" required style="width:50%; padding:5px;"> 歳</label>
-        </div>
-        <div style="flex:1;">
-          <label>性別（必須）<br>
-            <select name="gender" required style="padding:5px;">
-              <option value="">選択してください</option>
-              <option value="male">男</option>
-              <option value="female">女</option>
-              <option value="other">その他</option>
-            </select>
-          </label>
-        </div>
-      </div>
-      <div style="margin-bottom:10px;">
-        <label>署名（必須：お名前を入力してください）<br><input type="text" name="signature" required style="width:100%; padding:5px;"></label>
-      </div>
-      <div style="margin-bottom:10px;">
-        <label>Email（必須）<br><input type="email" name="email" required style="width:100%; padding:5px;"></label>
-      </div>
-      <p style="font-size:0.9em; text-align:right;">署名日：${new Date().toLocaleDateString()}</p>
-      
-      <div style="text-align:center; margin-top:20px;">
-        <button type="button" id="btn-consent" disabled style="padding:10px 30px; font-size:1.2em; cursor:pointer;">次へ</button>
-      </div>
-    </form>
-  </div>`,
-  choices: "NO_KEYS", // キーボードでの進行を無効化
-  on_load: function() {
-    const form = document.getElementById('consent-form');
-    const btn = document.getElementById('btn-consent');
-    
-    // 入力状態を監視してボタンの有効/無効を切り替え
-    const checkValidity = () => {
-      const isValid = form.checkValidity(); // 全てのrequiredが満たされているか
-      btn.disabled = !isValid;
-    };
-
-    form.addEventListener('change', checkValidity);
-    form.addEventListener('input', checkValidity);
-
-    // ボタンクリック時の処理
-    btn.addEventListener('click', () => {
-      // 同意データを取得（必要なら保存可能）
-      // const formData = new FormData(form);
-      // const data = Object.fromEntries(formData.entries());
-      // jsPsych.data.addProperties({ consent_info: data }); 
-      
-      jsPsych.finishTrial();
-    });
-  }
-};
-
-// ▼▼▼ 3. 同意撤回連絡先（Jキーで遷移） ▼▼▼
-const withdrawal_info_trial = {
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: function() {
-    return `
-    <div style="max-width: 800px; margin: 0 auto; line-height: 1.6; text-align: left;">
-      <h2 style="text-align:center;">実験の中断・同意の撤回について</h2>
-      <p>実験への参加は任意です。いつでも実験への参加を中断できます。また実験途中や実験後であっても同意を撤回することができます。同意撤回や実験の中断によって不利な扱いを受けることはありません。</p>
-      <p>同意撤回の意思が示されたときは、学会等の発表前であれば計測データ等は破棄します。</p>
-      <hr>
-      <p>もし実験結果の使用などに同意の撤回をしたい場合は、下記アドレスまで連絡してください。</p>
-      <div style="background-color:#f9f9f9; padding:20px; border-radius:5px; text-align:center;">
-        <p><strong>研究責任者：${STUDY_CONTACT.name}</strong></p>
-        <p>${STUDY_CONTACT.affiliation}</p>
-        <p>${STUDY_CONTACT.address}</p>
-        <p>電話：${STUDY_CONTACT.phone}</p>
-        <p>Email: <a href="mailto:${STUDY_CONTACT.email}">${STUDY_CONTACT.email}</a></p>
-      </div>
-      <hr>
-      <p style="text-align:center; font-size:1.1em; font-weight:bold;">内容を確認しましたら、<span style="color:red;">J キー</span> を押して実験を開始してください。</p>
-    </div>`;
-  },
-  choices: ['j'],
-  data: { task_phase: 'withdrawal_info' }
-};
-
 const initials_trial = {
   type: jsPsychSurveyText,
   questions: [
@@ -358,17 +410,23 @@ const initials_trial = {
             <p style="color: red; font-weight: bold;"><br>実験中（特に課題フェーズ）で画像がうまく表示されない（枠だけ表示されるなど）場合は、お手数ですがページを再読み込み（リロード）し、IDの入力からやり直してください。</p>
             <hr>
         </div>
-        <p>あなたのIDを半角英数字で入力してください（例: ST）：</p>
+        <p>あなたのイニシャル (例: YT) を入力してください。このイニシャルに、実験IDとして重複なしの3桁の数字を割り当てます。</p>
       `,
-      name: "initials",
+      name: "initialsInput", // Change name to capture initials
       required: true,
-      placeholder: "例: ST"
+      placeholder: "例: YT"
     }
   ],
-  button_label: "IDを送信して開始", // ラベルを少し変更
+  button_label: "IDを生成して開始",
   on_finish: function(data) {
-    participantInitials = sanitizeFileNamePart(data.response.initials);
-    jsPsych.data.addProperties({participant_initials: participantInitials});
+    const initials = data.response.initialsInput.toUpperCase(); // 入力されたイニシャルを取得し大文字に
+    const randomNumber = generateSafe3Digit(); // 999-995を除いたランダムな3桁を生成
+    const generatedID = initials + randomNumber; // イニシャルと数字を結合
+
+    // Set the global variable and add to data
+    participantInitials = generatedID;
+    jsPsych.data.write({ participant_initials: generatedID, task_phase: 'ID_collection' }); // 記録
+    jsPsych.data.addProperties({ participant_initials: generatedID }); // 後続のデータに追加
   }
 };
 
@@ -479,7 +537,7 @@ const raw_image_files = {
     grocerystore: [ '056_2.jpg', 'idd_supermarche.jpg', '08082003_aisle.jpg', 'int89.jpg', '100-0067_IMG.jpg', 'intDSCF0784_PhotoRedukto.jpg', '1798025006_f8c475b3fd.jpg', 'integral-color4_detail.jpg', '20070831draguenewyorkOK.jpg', 'japanese-food-fruit-stand.jpg', '22184680.jpg', 'kays-1.jpg', '44l.jpg', 'main.jpg', '9d37cca1-088e-4812-a319-9f8d3fcf37a1.jpg', 'market.jpg', 'APRIL242002FakeGroceryStore.jpg', 'mod16b.jpg', 'Grocery Store 1.jpg', 'papas2.jpg', 'Grocery Store 2.jpg', 'safeway_fireworks.jpg', 'Grocery-store-Moscow.jpg', 'shop04.jpg', 'IMG_0104-Takashimaya-fruit.jpg', 'shop12.jpg', 'IMG_0637.jpg', 'shop13.jpg', 'Inside the supermarket.jpg', 'shop14.jpg', 'MG_56_belo grocery 2.jpg', 'shop15.jpg', 'MainFoodStoreProduce1.jpg', 'shop16.jpg', 'Market5.jpg', 'shop17.jpg', 'Modi-in-Ilit-Colonie-Supermarche-1-2.jpg', 'shop18.jpg', 'Picture_22.jpg', 'shop30.jpg', 'ahpf.supermarche02.jpg', 'store.counter.jpg', 'ahpf.supermarche4.jpg', 'super_market.jpg', 'big-Grocery-Store.jpg', 'supermarch_.jpg', 'cbra3.jpg', 'supermarche-1.jpg', 'coffee_sold_supermarket_1.jpg', 'supermarche3-1.jpg', 'courses01.jpg', 'supermarche33-1.jpg', 'duroseshopDM1710_468x527.jpg', 'supermarket.jpg', 'grocery-store-740716-1.jpg', 'supermarket5.jpg', 'grocery.jpg', 'supermarket66.jpg', 'gs-image-Grocery_LEED-09-10.jpg', 'supermarket_rear_case_isles.jpg', ],
     library: [ '130309783_f194f43f71.jpg', '207157437_14c21369e9.jpg', '28-06-06 Biblioth_que Municipale (19).jpg', '34_AvH_014_library_stacks.jpg', '43407107_204b8504b5.jpg', '470618728_18b5550006.jpg', '473767793_d3cafc4eff.jpg', '57048683_74701f9fa9.jpg', '763634302_e25f44402d.jpg', 'BM_Frejus Bibliotheque 1.jpg', 'Bibliotheque6.jpg', 'Bibliotheque_01.jpg', 'Concord_Free_Public_Library_Renovation_122.jpg', 'DSC02518.jpg', 'Day100006web.jpg', 'Dsc00613-3.jpg', 'Fairfield_Pub_Library_A.jpg', 'Homework2.jpg', 'JPB_Library.jpg', 'Library Pictures (3).jpg', 'Library Pictures.jpg', 'Library98.jpg', 'Library_P2150016.jpg', 'New York Public Library5.jpg', 'association_bibliotheque.jpg', 'biblio01.jpg', 'bibliotheque55.jpg', 'bibliotheque_0908.jpg', 'bibliotheque_photo.jpg', 'bookstore_more_books.jpg', 'ccls-img-buildingbos.jpg', 'danielkimberlylibrarycl1.jpg', 'fibiba1.jpg', 'fine_arts.jpg', 'gallerie-1130426509812-81.80.90.133.jpg', 'howland.jpg', 'image bibliotheque.jpg', 'image_preview.jpg', 'ins18.jpg', 'ins19.jpg', 'ins21.jpg', 'inside01.jpg', 'int91.jpg', 'la_bibliotheque_de_la_tour_du_valat.jpg', 'librairie-16.jpg', 'librairie.jpg', 'library bookshelves large.jpg', 'library01.jpg', 'library02.jpg', 'library03.jpg', 'library04.jpg', 'library05.jpg', 'library2.jpg', 'library4.jpg', 'library466.jpg', 'library5.jpg', 'library_journals_books.jpg', 'mainLibrary.jpg', 'meura1.jpg', 'neilson-hays-library02.jpg', ],
     restaurant: [ '19165-298-298-1-0.jpg', 'int576.jpg', 'restau.04.jpg', '2006_11_tastingroom.jpg', 'int577.jpg', 'restau.08.jpg', 'Bertucci_01_lg.jpg', 'int578.jpg', 'restau.12.jpg', 'Gaststatte_kl.jpg', 'int579.jpg', 'restau.14.jpg', 'INT236.jpg', 'int60.jpg', 'restau.15.jpg', 'Kulturhaus_kneipe.jpg', 'int603.jpg', 'restau.17.jpg', 'N190036.jpg', 'int604.jpg', 'restau.18.jpg', 'N190059.jpg', 'int606.jpg', 'restau.19.jpg', 'OriginalSteakhouse.jpg', 'int607.jpg', 'restau79c.l.jpg', 'Restau30C.L.jpg', 'int608.jpg', 'room106.jpg', 'Restau33C.L.jpg', 'int783.jpg', 'room143.jpg', 'Restau52C.L.jpg', 'int803.jpg', 'room149.jpg', 'RestauC.L.jpg', 'int862.jpg', 'room171.jpg', 'food2_450.jpg', 'int863.jpg', 'room172.jpg', 'food4_450.jpg', 'int867.jpg', 'room176.jpg', 'gaststaette1.jpg', 'int90.jpg', 'room230.jpg', 'gaststaette15.jpg', 'mortonsdr.jpg', 'room246.jpg', 'gaststaette5.jpg', 'olis.small.jpg', 'room250.jpg', 'int112.jpg', 'restau.01.jpg', 'room251.jpg', 'int131.jpg', 'restau.02.jpg', 'room252.jpg', ],
-    kitchen: [ 'aa014484.jpg', 'cdmc1167.jpg', 'int360.jpg', 'k5.jpg', 'aa041720.jpg', 'cdmc1170.jpg', 'int362.jpg', 'k6.jpg', 'cdMC1148.jpg', 'cdmc1172.jpg', 'int365.jpg', 'k7.jpg', 'cdMC1154.jpg', 'cdmc1175.jpg', 'int396.jpg', 'k8.jpg', 'cdmc1119.jpg', 'cdmc1178.jpg', 'int422.jpg', 'k9.jpg', 'cdmc1120.jpg', 'cdmc1194.jpg', 'int423.jpg', 'kitchen003.jpg', 'cdmc1123.jpg', 'cdmc1289.jpg', 'int437.jpg', 'kitchen004.jpg', 'cdmc1126.jpg', 'cdmc1299.jpg', 'int474.jpg', 'kitchen031.jpg', 'cdmc1128.jpg', 'dining047.jpg', 'k1.jpg', 'kitchen032.jpg', 'cdmc1143.jpg', 'iclock.jpg', 'k10.jpg', 'kitchen054.jpg', 'cdmc1144.jpg', 'int166.jpg', 'k11.jpg', 'kitchen077.jpg', 'cdmc1145.jpg', 'int34.jpg', 'k12.jpg', 'kitchen081.jpg', 'cdmc1146.jpg', 'int347.jpg', 'k2.jpg', 'kitchen083.jpg', 'cdmc1151.jpg', 'int35.jpg', 'k3.jpg', 'kitchen086.jpg', 'cdmc1164.jpg', 'int357.jpg', 'k4.jpg', 'kitchen5.jpg', ],
+    kitchen: [ 'aa014484.jpg', 'cdmc1167.jpg', 'int360.jpg', 'k5.jpg', 'aa041720.jpg', 'cdmc1170.jpg', 'int362.jpg', 'k6.jpg', 'cdMC1148.jpg', 'cdmc1172.jpg', 'int365.jpg', 'k7.jpg', 'cdmc1119.jpg', 'cdmc1178.jpg', 'int422.jpg', 'k9.jpg', 'cdmc1120.jpg', 'cdmc1194.jpg', 'int423.jpg', 'kitchen003.jpg', 'cdmc1123.jpg', 'cdmc1289.jpg', 'int437.jpg', 'kitchen004.jpg', 'cdmc1126.jpg', 'cdmc1299.jpg', 'int474.jpg', 'kitchen031.jpg', 'cdmc1128.jpg', 'dining047.jpg', 'k1.jpg', 'kitchen032.jpg', 'cdmc1143.jpg', 'iclock.jpg', 'k10.jpg', 'kitchen054.jpg', 'cdmc1144.jpg', 'int166.jpg', 'k11.jpg', 'kitchen077.jpg', 'cdmc1145.jpg', 'int34.jpg', 'k12.jpg', 'kitchen081.jpg', 'cdmc1146.jpg', 'int347.jpg', 'k2.jpg', 'kitchen083.jpg', 'cdmc1151.jpg', 'int35.jpg', 'k3.jpg', 'kitchen086.jpg', 'cdmc1164.jpg', 'int357.jpg', 'k4.jpg', 'kitchen5.jpg', ],
     gym: [ 'Gym-Equipment.jpg', 'gym3.jpg', 'Gym05.jpg', 'gym45.jpg', 'Gym2_000.jpg', 'gym65.jpg', 'Gym432.jpg', 'gym_b.jpg', 'GymInt1.jpg', 'gym_b4.jpg', 'HO-00-01-5186-23_l.jpg', 'gym_left.jpg', 'HO-00-02-5304-28A_l.jpg', 'herade_inside.jpg', 'Image_Grande72.jpg', 'hotel-megeve-11.jpg', 'MSAC_Gym_-_20061515.jpg', 'int525.jpg', 'Photo-008.jpg', 'int838.jpg', 'Proflex gym lagos nigeria 4.jpg', 'junglegym-60.jpg', 'SALLE3.jpg', 'media39989.jpg', 'SalleMuscu.jpg', 'media40037.jpg', 'VA-02-01-6306-21_l.jpg', 'montreal_octo 030.jpg', 'bg-gym2.jpg', 'necker_salle_de_gym_reference.jpg', 'biosite-gym.jpg', 'p1a.jpg', 'csu6.jpg', 'refurbished-gym-equipment.jpg', 'fieldhouse-weightroom.jpg', 'room398.jpg', 'fitness_center3.jpg', 'room399.jpg', 'guyane_muscul.jpg', 'room424.jpg', 'gym001.jpg', 's1.jpg', 'gym03.jpg', 'saledemuscu11.jpg', 'gym04.jpg', 'salle-cardio-grand.jpg', 'gym06.jpg', 'salle_1.jpg', 'gym07.jpg', 'salle_9.jpg', 'gym08.jpg', 'southglade_gym-2.jpg', 'gym09.jpg', 'ucc_gym_photos_bg.jpg', 'gym13.jpg', 'uploads-images-photos_images-fullsize-gym.jpg', 'gym14.jpg', 'url.jpg', 'gym2.jpg', 'web-cardio-theatre-gym.jpg', ],
   },
   OUTDOOR: {
@@ -737,7 +795,7 @@ const sound_recognition_trial = {
         };
         audio1.addEventListener('ended', () => setTimeout(() => audio2.play().catch(e => { console.error("Audio 2 play failed:", e); soundEnded(); }), 100));
         audio2.addEventListener('ended', play_second_pair);
-        audio3.addEventListener('ended', () => setTimeout(() => audio4.play().catch(e => { console.error("Audio 4 play failed:", e); soundEnded(); }), 100));
+        audio3.addEventListener('ended', () => setTimeout(() => audio4.play().catch(e => { console.error("Audio 3 play failed:", e); soundEnded(); }), 100));
         
         setTimeout(() => {
             if(stimulus_div) stimulus_div.innerHTML = '<p style="font-size: 1.5em; text-align: center;">1組目...</p>';
@@ -754,13 +812,9 @@ const sound_recognition_block = {
 
 // --- タイムライン全体の定義 ---
 const timeline = [];
-
-// ▼▼▼ 実験説明書・同意書・同意撤回連絡先を追加 ▼▼▼
 timeline.push(study_description_trial);
 timeline.push(consent_form_trial);
 timeline.push(withdrawal_info_trial);
-// ▲▲▲ 追加ここまで ▲▲▲
-
 timeline.push(initials_trial);
 
 // ▼ 1. ID入力の直後に音と練習画像を読み込む
