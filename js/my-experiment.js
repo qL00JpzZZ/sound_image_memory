@@ -34,31 +34,68 @@ function generateSafe3Digit() {
 
 // -------------------- ADDED STUDY DESCRIPTION / CONSENT / WITHDRAWAL BLOCK --------------------
 
-// 1) 説明文書（目を通したら J キー）
+
+// 1) 説明文書（要点の確認とPDFダウンロード・目を通したら J キー）
 const study_description_trial = {
   type: jsPsychHtmlKeyboardResponse,
   stimulus: function() {
     return `
     <div style="max-width: 900px; margin: 0 auto; line-height: 1.6; text-align: left; font-size: 16px;">
-      <h2 style="text-align:center;">実験説明書</h2>
-      <div style="display:flex; gap:20px; align-items:flex-start; margin-bottom: 20px;">
-        <div style="flex:0 0 250px;">
+      
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+        <h2 style="margin:0;">実験説明書</h2>
+        <a href="explanation/explanation.pdf" target="_blank" rel="noopener noreferrer" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: bold;">
+  📄 詳細説明書(PDF)を表示/保存
+        </a>
+      </div>
+
+      <div style="display:flex; gap:20px; align-items:flex-start;">
+        <div style="flex:0 0 200px;">
              <img src="scenes/Illustration.png" alt="Illustration" style="width:100%; height:auto; border:1px solid #ddd; padding:5px;"/>
+             <p style="font-size:0.8em; color:#666; margin-top:5px;">実験イメージ図</p>
         </div>
+
         <div style="flex:1;">
-          <p><strong>研究課題：</strong>見たり聞いたりすることでヒトが学ぶ仕組みの研究</p>
-          <p><strong>研究実施場所：</strong>${STUDY_CONTACT.affiliation}</p>
-          <p><strong>研究責任者：</strong>${STUDY_CONTACT.affiliation}<br>助教 ${STUDY_CONTACT.name}</p>
-          <hr>
-          <p><strong>【研究目的】</strong></p>
-          <p>本研究では、ヒトが何度も見たり聞いたりする訓練を通じて、見え方や聞こえ方、感じ方、考え方がどのように変わり、その変化には脳のどのような仕組みが関わるか明らかにすることを目的として行われています。また、この実験は、個人の能力を検査するものではありません。本実験への参加により予想される利益・不利益はありません。</p>
-          <p><strong>【研究方法】</strong></p>
-          <p>実験室内の椅子に座り、ディスプレイに向かって課題を行っていただきます。行っていただく課題は、ディスプレイやスピーカー、イヤホンなどから提示される視聴覚刺激の種類の判別です（左図参照）。マウスやキーボード等の操作、またはマイクへの発話による回答を行っていただきます。</p>
-          <p>課題は5〜10分ごとに小休止します。ご自身の判断で休憩を取りながら課題を行います。全ての測定に要する時間は、1回あたり最大2時間です。</p>
+          <p><strong>研究責任者：</strong>${STUDY_CONTACT.affiliation} 助教 ${STUDY_CONTACT.name}</p>
+          
+          <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
+            <h3 style="margin-top: 0; font-size: 1.1em; border-bottom: 2px solid #ddd; padding-bottom: 5px;">次ページの同意書署名の前に、以下をご確認ください</h3>
+            
+            <ul style="padding-left: 20px; margin-bottom: 0;">
+              <li style="margin-bottom: 8px;">
+                <strong>【研究目的・方法】</strong><br>
+                画像と音声の記憶・判別課題を行います。所要時間は休憩を含め最大2時間程度です。
+              </li>
+              <li style="margin-bottom: 8px;">
+                <strong>【参加条件】</strong><br>
+                <span style="color:red;">18歳以上</span>であり、<span style="color:red;">視力（矯正含む）が0.8以上</span>であることが条件です。
+              </li>
+              <li style="margin-bottom: 8px;">
+                <strong>【自由意思と中断】</strong><br>
+                参加は任意です。実験中いつでも<span style="color:red;">不利益なく中断・同意撤回</span>が可能です。
+              </li>
+              <li style="margin-bottom: 8px;">
+                <strong>【個人情報の保護とデータ公開】</strong><br>
+                個人情報は厳重に管理されます。実験データは個人が特定されない統計データとして処理され、学会発表や<span style="color:red;">公的データベース（Open Science Framework等）で公開</span>される可能性があります。
+              </li>
+              <li style="margin-bottom: 8px;">
+                <strong>【謝礼・交通費・権利】</strong><br>
+                謝礼の支払いは規定に従いますが、交通費の支給はありません。本実験で得られたデータの知的財産権は参加者には帰属しません。
+              </li>
+            </ul>
+          </div>
+          
+          <p style="font-size: 0.9em; margin-top: 10px;">
+            ※より詳細な手順や連絡先については、右上のボタンからPDFをダウンロードしてご確認ください。
+          </p>
         </div>
       </div>
-      <hr>
-      <p style="text-align:center; font-size:1.1em; font-weight:bold;">この説明を読み終えたら、<span style="color:red;">J キー</span> を押して次へ進んでください。</p>
+
+      <hr style="margin: 20px 0;">
+      <p style="text-align:center; font-size:1.1em; font-weight:bold;">
+        上記の内容およびPDFの内容を確認し、理解しましたら<br>
+        <span style="color:red; font-size:1.3em;">J キー</span> を押して同意書入力へ進んでください。
+      </p>
     </div>
     `;
   },
