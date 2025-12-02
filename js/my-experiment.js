@@ -1,13 +1,13 @@
-// -------------------- 連絡先・個人情報設定 (ここを書き換えてください) --------------------
+// -------------------- 連絡先・個人情報設定 --------------------
 const STUDY_CONTACT = {
-  name: '樋口　洋子', // 研究責任者の氏名
+  name: '樋口　洋子',
   affiliation: '千葉工業大学 情報変革科学部 認知情報科学科',
   address: '千葉県習志野市津田沼2-17-1',
-  phone: '047-478-0107', // 電話番号
-  email: 'higuchi.yoko@p.chibakoudai.jp' // メールアドレス
+  phone: '047-478-0107',
+  email: 'higuchi.yoko@p.chibakoudai.jp'
 };
 
-// -------------------- HELPER FUNCTIONS FOR ID GENERATION --------------------
+// -------------------- HELPER FUNCTIONS --------------------
 
 // ファイル名に使えない文字を置換・削除する
 function sanitizeFileNamePart(s) {
@@ -15,10 +15,8 @@ function sanitizeFileNamePart(s) {
   return String(s).trim().replace(/[,\/\\()?%#:*"|<>]/g, '_').replace(/\s+/g, '_').slice(0, 50);
 }
 
-// ★★★ 999, 998, 997, 996, 995 を除外するための定数リスト ★★★
+// 999-995を除外して3桁のIDを生成
 const EXCLUDED_NUMS = [999, 998, 997, 996, 995];
-
-// ★★★ 新しいID生成ロジック ★★★
 function generateSafe3Digit() {
     let num;
     do {
@@ -27,67 +25,100 @@ function generateSafe3Digit() {
     return String(num).padStart(3, '0');
 }
 
-// -------------------- ADDED STUDY DESCRIPTION / CONSENT / WITHDRAWAL BLOCK --------------------
+// -------------------- サーバー送信関数 --------------------
 
-// 1) 説明文書（要点の確認とPDFダウンロード・目を通したら J キー）
+// テキスト(CSV)でも画像(Base64)でも送れる汎用関数
+async function saveFileToServer(filename, content, folderKey = 'main', contentType = 'text/csv', isBase64 = false) {
+  try {
+    const response = await fetch('/api/saveToDrive', { 
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ 
+          filename: filename, 
+          content: content,
+          folderKey: folderKey,
+          contentType: contentType,
+          isBase64: isBase64 
+      })
+    });
+    
+    if (!response.ok) {
+      let errorText = await response.text();
+      let errorJson = {};
+      try { errorJson = JSON.parse(errorText); } catch (e) {}
+      throw new Error(`Server error: ${response.status} - ${errorJson.error || errorText}`);
+    }
+    
+    const result = await response.json();
+    console.log('Server response:', result);
+    return result;
+  } catch (error) {
+    console.error('Save failed:', error);
+    throw error;
+  }
+}
+
+// 既存コードとの互換用ラッパー（CSV保存）
+async function saveCsvToServer(filename, csvText, folderKey = 'main') {
+    return saveFileToServer(filename, csvText, folderKey, 'text/csv', false);
+}
+
+// -------------------- 説明・同意・撤回 --------------------
+
+// 1) 説明文書（修正版：画像削除・ボタン移動・文言変更）
 const study_description_trial = {
   type: jsPsychHtmlKeyboardResponse,
   stimulus: function() {
     return `
     <div style="max-width: 900px; margin: 0 auto; line-height: 1.6; text-align: left; font-size: 16px;">
       
-      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
-        <h2 style="margin:0;">実験説明書</h2>
-        <a href="explanation/explanation.pdf" target="_blank" rel="noopener noreferrer" style="background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: bold;">
-  📄 詳細説明書(PDF)を表示/保存
-        </a>
+      <div style="margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+        <h2 style="margin:0; text-align:center;">実験説明書</h2>
       </div>
 
-      <div style="display:flex; gap:20px; align-items:flex-start;">
-        <div style="flex:0 0 200px;">
-             <img src="scenes/Illustration.png" alt="Illustration" style="width:100%; height:auto; border:1px solid #ddd; padding:5px;"/>
-             <p style="font-size:0.8em; color:#666; margin-top:5px;">実験イメージ図</p>
+      <div>
+        <p style="text-align: right;"><strong>研究責任者：</strong>${STUDY_CONTACT.affiliation} 助教 ${STUDY_CONTACT.name}</p>
+        
+        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
+          <h3 style="margin-top: 0; font-size: 1.1em; border-bottom: 2px solid #ddd; padding-bottom: 5px;">次ページの同意書署名の前に、以下をご確認ください</h3>
+          
+          <ul style="padding-left: 20px; margin-bottom: 0;">
+            <li style="margin-bottom: 8px;">
+              <strong>【研究目的・方法】</strong><br>
+              画像と音声の記憶・判別課題を行います。所要時間は休憩を含め20分程度です。
+            </li>
+            <li style="margin-bottom: 8px;">
+              <strong>【参加条件】</strong><br>
+              <span style="color:red;">18歳以上</span>であり、<span style="color:red;">視力（矯正含む）が0.8以上</span>であることが条件です。
+            </li>
+            <li style="margin-bottom: 8px;">
+              <strong>【自由意思と中断】</strong><br>
+              参加は任意です。実験中いつでも<span style="color:red;">不利益なく中断・同意撤回</span>が可能です。
+            </li>
+            <li style="margin-bottom: 8px;">
+              <strong>【個人情報の保護とデータ公開】</strong><br>
+              個人情報は厳重に管理されます。実験データは個人が特定されない統計データとして処理され、学会発表や<span style="color:red;">公的データベース（Open Science Framework等）で公開</span>される可能性があります。
+            </li>
+            <li style="margin-bottom: 8px;">
+              <strong>【謝礼・交通費・権利】</strong><br>
+              謝礼の支払いは規定に従います。交通費の支給はございません。本実験で得られたデータの知的財産権は参加者には帰属しません。
+            </li>
+          </ul>
         </div>
-
-        <div style="flex:1;">
-          <p><strong>研究責任者：</strong>${STUDY_CONTACT.affiliation} 助教 ${STUDY_CONTACT.name}</p>
-          
-          <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
-            <h3 style="margin-top: 0; font-size: 1.1em; border-bottom: 2px solid #ddd; padding-bottom: 5px;">次ページの同意書署名の前に、以下をご確認ください</h3>
-            
-            <ul style="padding-left: 20px; margin-bottom: 0;">
-              <li style="margin-bottom: 8px;">
-                <strong>【研究目的・方法】</strong><br>
-                画像と音声の記憶・判別課題を行います。所要時間は休憩を含め最大2時間程度です。
-              </li>
-              <li style="margin-bottom: 8px;">
-                <strong>【参加条件】</strong><br>
-                <span style="color:red;">18歳以上</span>であり、<span style="color:red;">視力（矯正含む）が0.8以上</span>であることが条件です。
-              </li>
-              <li style="margin-bottom: 8px;">
-                <strong>【自由意思と中断】</strong><br>
-                参加は任意です。実験中いつでも<span style="color:red;">不利益なく中断・同意撤回</span>が可能です。
-              </li>
-              <li style="margin-bottom: 8px;">
-                <strong>【個人情報の保護とデータ公開】</strong><br>
-                個人情報は厳重に管理されます。実験データは個人が特定されない統計データとして処理され、学会発表や<span style="color:red;">公的データベース（Open Science Framework等）で公開</span>される可能性があります。
-              </li>
-              <li style="margin-bottom: 8px;">
-                <strong>【謝礼・交通費・権利】</strong><br>
-                謝礼の支払いは規定に従いますが、交通費の支給はありません。本実験で得られたデータの知的財産権は参加者には帰属しません。
-              </li>
-            </ul>
-          </div>
-          
-          <p style="font-size: 0.9em; margin-top: 10px;">
-            ※より詳細な手順や連絡先については、右上のボタンからPDFをダウンロードしてご確認ください。
+        
+        <div style="margin-top: 20px; text-align: center;">
+          <p style="font-size: 0.9em; margin-bottom: 10px;">
+            ※より詳細な手順や連絡先については、下のボタンからPDFをダウンロードしてご確認ください。
           </p>
+          <a href="explanation/explanation.docx" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: bold;">
+            📄 詳細説明書をダウンロード
+          </a>
         </div>
       </div>
 
       <hr style="margin: 20px 0;">
       <p style="text-align:center; font-size:1.1em; font-weight:bold;">
-        上記の内容およびPDFの内容を確認し、理解しましたら<br>
+        上記の内容および説明書の内容を確認し、理解しましたら<br>
         <span style="color:red; font-size:1.3em;">J キー</span> を押して同意書入力へ進んでください。
       </p>
     </div>
@@ -97,9 +128,9 @@ const study_description_trial = {
   data: { task_phase: 'study_description' }
 };
 
-// 2) 同意書フォーム（修正：html2canvasでスクリーンショットを撮って保存）
+// 2) 同意書フォーム（修正版：html2canvas保存対応）
 const consent_form_html = `
-  <div id="consent-container" style="max-width:800px; margin:0 auto; line-height:1.6; text-align:left; font-size:15px; background-color: white; padding: 20px;">
+  <div id="consent-container" style="max-width:800px; margin:0 auto; line-height:1.6; text-align:left; font-size:15px; background-color: #ffffff; padding: 40px; border-radius: 5px;">
     <h2 style="text-align:center;">研究参加同意書</h2>
     <p><strong>${STUDY_CONTACT.affiliation}<br>助教 ${STUDY_CONTACT.name} 殿</strong></p>
     <p>私は以下の項目について確認し、本研究の参加に同意します。</p>
@@ -154,7 +185,7 @@ const consent_form_trial = {
   choices: "NO_KEYS",
   data: { task_phase: 'consent_form' },
   on_load: function() {
-    // 1. スクリーンショット用のライブラリ(html2canvas)を動的に読み込む
+    // html2canvasの読み込み
     const script = document.createElement('script');
     script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
     document.head.appendChild(script);
@@ -165,39 +196,45 @@ const consent_form_trial = {
     const msg = document.getElementById('saving-message');
 
     btn.addEventListener('click', function() {
-      // 2. 入力チェック
+      // 1. バリデーション
       if (!form.checkValidity()) {
         form.reportValidity();
         return;
       }
 
-      // 3. 保存処理開始：ボタンを無効化してメッセージ表示
+      // 2. 画面トップへ移動（白紙防止）
+      window.scrollTo(0, 0);
+
+      // 3. UIロック
       btn.disabled = true;
-      btn.style.display = 'none'; // 画像に入らないように消す
+      btn.style.display = 'none';
       msg.style.display = 'block';
 
-      // フォームデータを取得（データログ用）
+      // 4. データ準備
       const formData = new FormData(form);
       const obj = {};
       for (const [k,v] of formData.entries()) { obj[k] = v; }
       
-      // 一時的なID生成（この時点ではまだ正式IDがないため）
       const tempId = obj.kana ? sanitizeFileNamePart(obj.kana) : 'unknown';
       const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
       const filename = `consent_${tempId}_${timestamp}.png`;
 
-      // 4. html2canvasでスクリーンショットを撮影
+      // 5. キャプチャと送信
       if (typeof html2canvas !== 'undefined') {
-        html2canvas(container).then(canvas => {
-            // 画像をBase64データURLに変換
+        html2canvas(container, {
+            scale: 2,
+            backgroundColor: '#ffffff',
+            scrollX: 0, 
+            scrollY: 0,
+            useCORS: true
+        }).then(canvas => {
             const imgData = canvas.toDataURL('image/png');
-            // "data:image/png;base64," の部分を取り除く
             const base64Content = imgData.split(',')[1];
 
-            // サーバーへ送信（'explanation'フォルダを指定）
+            // 'explanation' フォルダへ保存
             saveFileToServer(filename, base64Content, 'explanation', 'image/png', true)
                 .then(() => {
-                    console.log('Consent form image saved.');
+                    console.log('Consent saved.');
                     jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj, saved_image: true });
                     jsPsych.finishTrial();
                 })
@@ -209,16 +246,14 @@ const consent_form_trial = {
                 });
         });
       } else {
-        // ライブラリ読み込み失敗時のフォールバック
-        console.error('html2canvas library not loaded.');
-        jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj, saved_image: false });
+        console.error('html2canvas not loaded.');
         jsPsych.finishTrial();
       }
     });
   }
 };
 
-// 3) 同意撤回連絡先画面（同様に J キーで進む）
+// 3) 同意撤回連絡先画面
 const withdrawal_info_trial = {
   type: jsPsychHtmlKeyboardResponse,
   stimulus: function() {
@@ -245,46 +280,7 @@ const withdrawal_info_trial = {
   data: { task_phase: 'withdrawal_info' }
 };
 
-// -------------------- サーバー送信関数（汎用化） --------------------
-// テキスト(CSV)でも画像(Base64)でも送れるように拡張
-async function saveFileToServer(filename, content, folderKey = 'main', contentType = 'text/csv', isBase64 = false) {
-  try {
-    const response = await fetch('/api/saveToDrive', { // Vercel APIのエンドポイント
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ 
-          filename: filename, 
-          content: content, // CSVテキスト または Base64文字列
-          folderKey: folderKey,
-          contentType: contentType, // 'text/csv' or 'image/png'
-          isBase64: isBase64 
-      })
-    });
-    if (!response.ok) {
-      let errorText = await response.text();
-      let errorJson = {};
-      try {
-        errorJson = JSON.parse(errorText);
-      } catch (e) {
-        console.warn("Server error response was not valid JSON:", errorText);
-      }
-      throw new Error(`Server error: ${response.status} - ${errorJson.error || errorText}`);
-    }
-    const result = await response.json();
-    console.log('サーバーからの応答:', result);
-    return result;
-  } catch (error) {
-    console.error('結果の保存に失敗しました:', error);
-    throw error;
-  }
-}
-
-// 互換性のためのラッパー関数（既存コードの修正を最小限にするため）
-async function saveCsvToServer(filename, csvText, folderKey = 'main') {
-    return saveFileToServer(filename, csvText, folderKey, 'text/csv', false);
-}
-
-// -------------------- jsPsychの初期化 --------------------
+// -------------------- jsPsych 初期化 & データ保存 --------------------
 let participantInitials = 'unknown';
 
 const jsPsych = initJsPsych({
@@ -292,7 +288,6 @@ const jsPsych = initJsPsych({
     jsPsych.getDisplayElement().innerHTML = '<p style="font-size: 20px;">結果を集計・保存しています。しばらくお待ちください...</p>';
 
     try {
-        // --- Step 1: 共通の変数と全データを取得 ---
         const safeInitials = participantInitials || 'unknown_id';
         const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
         
@@ -300,11 +295,7 @@ const jsPsych = initJsPsych({
         const image_rec_trials = jsPsych.data.get().filter({ task_phase: 'image_recognition' }).values();
         const sound_rec_trials = jsPsych.data.get().filter({ task_phase: 'sound_recognition' }).values();
 
-        if (!learning_trials || learning_trials.length === 0) console.warn('Learning trials data not found or empty.');
-        if (!image_rec_trials || image_rec_trials.length === 0) console.warn('Image recognition trials data not found or empty.');
-        if (!sound_rec_trials || sound_rec_trials.length === 0) console.warn('Sound recognition trials data not found or empty.');
-
-        // --- Step 2: [ファイル1] 学習フェーズのデータを作成・保存 ---
+        // 学習データのCSV作成
         const learning_header = [
             'participant_initials', 'trial_index', 'image_category_correct', 'sound_pattern', 'image_filename', 'response_key', 'response_category', 'correct', 'rt'
         ].join(',') + '\n';
@@ -314,23 +305,18 @@ const jsPsych = initJsPsych({
             const trial_index = index + 1;
             const lowerFilename = (trial.image_filename || '').toLowerCase();
             const image_category_correct = lowerFilename.includes('indoor') ? 'indoor' : (lowerFilename.includes('outdoor') ? 'outdoor' : 'N/A');
-            const sound_pattern = trial.sound_pattern || 'N/A';
-            const image_filename = trial.image_filename || 'N/A';
-            const response_key = trial.response || 'N/A';
             const response_category = trial.response === 'j' ? 'indoor' : (trial.response === 'k' ? 'outdoor' : 'N/A');
-            const correct = trial.correct;
-            const rt = trial.rt || 'N/A';
 
             const row = [
                 safeInitials,
                 trial_index,
                 image_category_correct,
-                sound_pattern,
-                image_filename,
-                response_key,
+                trial.sound_pattern || 'N/A',
+                trial.image_filename || 'N/A',
+                trial.response || 'N/A',
                 response_category,
-                correct,
-                rt
+                trial.correct,
+                trial.rt || 'N/A'
             ].join(',');
             learning_data_rows.push(row);
         });
@@ -338,7 +324,8 @@ const jsPsych = initJsPsych({
         const learning_csvData = learning_header + learning_data_rows.join('\n');
         const learning_filename = `learning_${safeInitials}_${timestamp}.csv`;
 
-        // --- Step 3: [ファイル2] テストフェーズのデータを作成・保存 ---
+        // テストデータのCSV作成
+        // (正答率計算などは元のロジックを維持)
         const image_to_sound_map = new Map();
         learning_trials.forEach(trial => {
             if (trial && trial.image_filename && trial.sound_pattern) {
@@ -347,19 +334,19 @@ const jsPsych = initJsPsych({
         });
 
         const image_rec_stats = {
-        'パターンA': { correct: 0, total: 0 },
-        'パターンB': { correct: 0, total: 0 },
-        'パターンX': { correct: 0, total: 0 }
+            'パターンA': { correct: 0, total: 0 },
+            'パターンB': { correct: 0, total: 0 },
+            'パターンX': { correct: 0, total: 0 }
         };
         image_rec_trials.forEach(trial => {
-            if (!trial) { return; }
+            if (!trial) return;
             if (trial.status === 'old') {
                 const filename = trial.image_filename;
-                if (!filename) { return; }
+                if (!filename) return;
                 const sound_pattern = image_to_sound_map.get(filename);
                 if (sound_pattern && image_rec_stats[sound_pattern]) {
                     image_rec_stats[sound_pattern].total++;
-                    if (trial.correct === true) { image_rec_stats[sound_pattern].correct++; }
+                    if (trial.correct === true) image_rec_stats[sound_pattern].correct++;
                 }
             }
         });
@@ -367,7 +354,7 @@ const jsPsych = initJsPsych({
         function calculate_percentage(correct, total) {
             if (total === 0) return 0;
             const percentage = (correct / total) * 100;
-            if (isNaN(percentage)) { return 0; }
+            if (isNaN(percentage)) return 0;
             return parseFloat(percentage.toPrecision(2));
         }
         
@@ -424,6 +411,8 @@ const jsPsych = initJsPsych({
         const test_csvData = test_header + test_data_rows.join('\n');
         const test_filename = `test_${safeInitials}_${timestamp}.csv`;
 
+        // 全データの保存（並列実行）
+        // ※ folderKey を指定しなければデフォルト(main)に保存されます
         await Promise.all([
             saveCsvToServer(learning_filename, learning_csvData),
             saveCsvToServer(test_filename, test_csvData)
@@ -433,22 +422,19 @@ const jsPsych = initJsPsych({
             <div style="max-width: 800px; text-align: center; line-height: 1.6; font-size: 20px;">
                 <h2>実験終了</h2>
                 <p>これで実験は終了です。</p>
-                <p>本実験の本当の目的は画像と音の記憶の関係を調べることでした。</p>
-                <p>音の連続の記憶がいいときに、画像の連続の記憶も良くなるという仮説を実験で検証しています。</p>
                 <p>ありがとうございました！</p>
                 <p>データが確認でき次第、謝礼のお支払いをいたします。</p>
                 <br>
                 <p>このウィンドウを閉じて終了してください。</p>
             </div>`;
             
-    } catch (dataProcessingError) {
-        console.error('Data processing or saving failed:', dataProcessingError);
+    } catch (e) {
+        console.error('Data saving failed:', e);
         jsPsych.getDisplayElement().innerHTML = `
           <div style="text-align: center; max-width: 800px; font-size: 20px;">
             <h2>エラー</h2>
-            <p>結果の処理または保存中にエラーが発生しました。</p>
-            <p>お手数ですが、実験実施者にお知らせください。</p>
-            <p>エラー詳細: ${dataProcessingError.message}</p>
+            <p>結果の保存中にエラーが発生しました。</p>
+            <p>詳細: ${e.message}</p>
           </div>`;
     }
   }
@@ -466,26 +452,25 @@ const initials_trial = {
             <p>実験時間は個人差がありますが20分程度です。</p>
             <p>実験参加に同意していただける場合はあらかじめ配布されたIDを入力してください。</p>
             <hr>
-            <p style="color: red; font-weight: bold;"><br>実験中（特に課題フェーズ）で画像がうまく表示されない（枠だけ表示されるなど）場合は、お手数ですがページを再読み込み（リロード）し、IDの入力からやり直してください。</p>
+            <p style="color: red; font-weight: bold;"><br>画像がうまく表示されない場合は、ページを再読み込みしてください。</p>
             <hr>
         </div>
-        <p>あなたのイニシャル (例: YT) を入力してください。このイニシャルに、実験IDとして重複なしの3桁の数字を割り当てます。</p>
+        <p>あなたのイニシャル (例: YT) を入力してください。</p>
       `,
-      name: "initialsInput", // Change name to capture initials
+      name: "initialsInput",
       required: true,
       placeholder: "例: YT"
     }
   ],
   button_label: "IDを生成して開始",
   on_finish: function(data) {
-    const initials = data.response.initialsInput.toUpperCase(); // 入力されたイニシャルを取得し大文字に
-    const randomNumber = generateSafe3Digit(); // 999-995を除いたランダムな3桁を生成
-    const generatedID = initials + randomNumber; // イニシャルと数字を結合
+    const initials = data.response.initialsInput.toUpperCase();
+    const randomNumber = generateSafe3Digit();
+    const generatedID = initials + randomNumber;
 
-    // Set the global variable and add to data
     participantInitials = generatedID;
-    jsPsych.data.write({ participant_initials: generatedID, task_phase: 'ID_collection' }); // 記録
-    jsPsych.data.addProperties({ participant_initials: generatedID }); // 後続のデータに追加
+    jsPsych.data.write({ participant_initials: generatedID, task_phase: 'ID_collection' });
+    jsPsych.data.addProperties({ participant_initials: generatedID });
   }
 };
 
@@ -499,7 +484,10 @@ const sound_check_trial = {
             sound_check_sound = jsPsych.randomization.sampleWithoutReplacement(all_sounds, 1)[0];
             const audio = new Audio(sound_check_sound);
             setTimeout(() => { audio.play().catch(e => console.error("Audio play failed:", e)); }, 500);
-        } else { console.error("Error: all_sounds is not defined or empty for sound check."); jsPsych.endExperiment("音声ファイルの読み込みに失敗しました。実験を中止します。"); }
+        } else { 
+            console.error("Error: all_sounds is empty."); 
+            jsPsych.endExperiment("音声ファイルの読み込みに失敗しました。"); 
+        }
     },
     data: { task_phase: 'sound_check' }
 };
@@ -543,7 +531,6 @@ const practice_procedure = {
   data: { task_phase: 'practice', image_filename: jsPsych.timelineVariable('image') },
   on_start: function(trial) {
     if (all_sounds && all_sounds.length > 0) { const random_sound = jsPsych.randomization.sampleWithoutReplacement(all_sounds, 1)[0]; const audio = new Audio(random_sound); audio.play().catch(e => console.error("Practice audio play failed:", e)); }
-    else { console.error("Error: all_sounds is not defined or empty for practice trial."); }
   }
 };
 const practice_instructions_end = {
@@ -581,7 +568,7 @@ const instructions_sound_rec = {
     post_trial_gap: 500
 };
 
-// --- 練習用画像ファイルリスト ---
+// --- 練習用画像リスト ---
 const practice_image_files = [
   'practice/scenes/amusementpark.jpg', 'practice/scenes/bar.jpg', 'practice/scenes/barm.jpg',
   'practice/scenes/bedroom.jpg', 'practice/scenes/bridge.jpg', 'practice/scenes/campsite.jpg',
@@ -589,8 +576,7 @@ const practice_image_files = [
   'practice/scenes/studio.jpg'
 ];
 
-// --- 本番用画像・音声ファイルリスト (省略なし) ---
-// ▼▼▼ 画像リスト (省略なし) ▼▼▼
+// --- 本番用画像・音声リスト ---
 const raw_image_files = {
   INDOOR: {
     grocerystore: [ '056_2.jpg', 'idd_supermarche.jpg', '08082003_aisle.jpg', 'int89.jpg', '100-0067_IMG.jpg', 'intDSCF0784_PhotoRedukto.jpg', '1798025006_f8c475b3fd.jpg', 'integral-color4_detail.jpg', '20070831draguenewyorkOK.jpg', 'japanese-food-fruit-stand.jpg', '22184680.jpg', 'kays-1.jpg', '44l.jpg', 'main.jpg', '9d37cca1-088e-4812-a319-9f8d3fcf37a1.jpg', 'market.jpg', 'APRIL242002FakeGroceryStore.jpg', 'mod16b.jpg', 'Grocery Store 1.jpg', 'papas2.jpg', 'Grocery Store 2.jpg', 'safeway_fireworks.jpg', 'Grocery-store-Moscow.jpg', 'shop04.jpg', 'IMG_0104-Takashimaya-fruit.jpg', 'shop12.jpg', 'IMG_0637.jpg', 'shop13.jpg', 'Inside the supermarket.jpg', 'shop14.jpg', 'MG_56_belo grocery 2.jpg', 'shop15.jpg', 'MainFoodStoreProduce1.jpg', 'shop16.jpg', 'Market5.jpg', 'shop17.jpg', 'Modi-in-Ilit-Colonie-Supermarche-1-2.jpg', 'shop18.jpg', 'Picture_22.jpg', 'shop30.jpg', 'ahpf.supermarche02.jpg', 'store.counter.jpg', 'ahpf.supermarche4.jpg', 'super_market.jpg', 'big-Grocery-Store.jpg', 'supermarch_.jpg', 'cbra3.jpg', 'supermarche-1.jpg', 'coffee_sold_supermarket_1.jpg', 'supermarche3-1.jpg', 'courses01.jpg', 'supermarche33-1.jpg', 'duroseshopDM1710_468x527.jpg', 'supermarket.jpg', 'grocery-store-740716-1.jpg', 'supermarket5.jpg', 'grocery.jpg', 'supermarket66.jpg', 'gs-image-Grocery_LEED-09-10.jpg', 'supermarket_rear_case_isles.jpg' ],
