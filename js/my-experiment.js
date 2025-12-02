@@ -450,7 +450,7 @@ const initials_trial = {
         <div style="max-width: 800px; text-align: left; line-height: 1.6; margin-bottom: 20px;">
             <p>本実験は、画像の認識の速さを測ることが目的です。</p>
             <p>実験時間は個人差がありますが20分程度です。</p>
-            <p>実験参加に同意していただける場合はあらかじめ配布されたIDを入力してください。</p>
+            <p>実験参加に同意していただける場合は以下のフォームに自身のイニシャルを入力してください</p>
             <hr>
             <p style="color: red; font-weight: bold;"><br>画像がうまく表示されない場合は、ページを再読み込みしてください。</p>
             <hr>
