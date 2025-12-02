@@ -110,7 +110,7 @@ const study_description_trial = {
           <p style="font-size: 0.9em; margin-bottom: 10px;">
             ※より詳細な手順や連絡先については、下のボタンからPDFをダウンロードしてご確認ください。
           </p>
-          <a href="explanation/explanation.docx" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: bold;">
+          <a href="explanation/explanation.pdf" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: bold;">
             📄 詳細説明書をダウンロード
           </a>
         </div>
