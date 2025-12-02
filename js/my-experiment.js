@@ -19,21 +19,15 @@ function sanitizeFileNamePart(s) {
 const EXCLUDED_NUMS = [999, 998, 997, 996, 995];
 
 // ★★★ 新しいID生成ロジック ★★★
-// 000〜999の中から、EXCLUDED_NUMS に含まれない安全な3桁の数字をランダムに生成
 function generateSafe3Digit() {
     let num;
     do {
-        // 0から999までのランダムな整数を生成
         num = Math.floor(Math.random() * 1000);
-    // 生成された数が EXCLUDED_NUMS に含まれる間、ループを継続
     } while (EXCLUDED_NUMS.includes(num));
-
-    // 数字を文字列に変換し、先頭を '0' で埋めて3桁にする (例: 5 -> "005")
     return String(num).padStart(3, '0');
 }
 
 // -------------------- ADDED STUDY DESCRIPTION / CONSENT / WITHDRAWAL BLOCK --------------------
-
 
 // 1) 説明文書（要点の確認とPDFダウンロード・目を通したら J キー）
 const study_description_trial = {
@@ -103,9 +97,9 @@ const study_description_trial = {
   data: { task_phase: 'study_description' }
 };
 
-// 2) 同意書フォーム（チェックボックス・入力必須、次へボタンで遷移）
+// 2) 同意書フォーム（修正：html2canvasでスクリーンショットを撮って保存）
 const consent_form_html = `
-  <div style="max-width:800px; margin:0 auto; line-height:1.6; text-align:left; font-size:15px;">
+  <div id="consent-container" style="max-width:800px; margin:0 auto; line-height:1.6; text-align:left; font-size:15px; background-color: white; padding: 20px;">
     <h2 style="text-align:center;">研究参加同意書</h2>
     <p><strong>${STUDY_CONTACT.affiliation}<br>助教 ${STUDY_CONTACT.name} 殿</strong></p>
     <p>私は以下の項目について確認し、本研究の参加に同意します。</p>
@@ -147,50 +141,80 @@ const consent_form_html = `
       <p style="font-size:0.9em; text-align:right;">署名日：${new Date().toLocaleDateString()}</p>
       
       <div style="text-align:center; margin-top:20px;">
-        <button type="button" id="btn-consent" disabled style="padding:10px 30px; font-size:1.2em; cursor:pointer;">次へ</button>
+        <button type="button" id="btn-consent" style="padding:10px 30px; font-size:1.2em; cursor:pointer;">次へ</button>
       </div>
     </form>
+    <div id="saving-message" style="display:none; text-align:center; color:blue; font-weight:bold; margin-top:10px;">同意書を保存しています...</div>
   </div>
 `;
 
 const consent_form_trial = {
   type: jsPsychHtmlKeyboardResponse,
   stimulus: consent_form_html,
-  choices: "NO_KEYS", // キーボードでの進行を無効化
+  choices: "NO_KEYS",
   data: { task_phase: 'consent_form' },
   on_load: function() {
+    // 1. スクリーンショット用のライブラリ(html2canvas)を動的に読み込む
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+    document.head.appendChild(script);
+
     const form = document.getElementById('consent-form');
     const btn = document.getElementById('btn-consent');
-    
-    // 入力状態を監視してボタンの有効/無効を切り替え
-    const checkValidity = () => {
-      const isValid = form.checkValidity(); // 全てのrequiredが満たされているか
-      btn.disabled = !isValid;
-    };
+    const container = document.getElementById('consent-container');
+    const msg = document.getElementById('saving-message');
 
-    function allRequiredFilled() {
-        return form.checkValidity();
-    }
-
-    form.addEventListener('change', checkValidity);
-    form.addEventListener('input', checkValidity);
-
-    // ボタンクリック時の処理
     btn.addEventListener('click', function() {
-      if (!allRequiredFilled()) {
-        btn.disabled = true; return;
+      // 2. 入力チェック
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
       }
-      // collect form data
+
+      // 3. 保存処理開始：ボタンを無効化してメッセージ表示
+      btn.disabled = true;
+      btn.style.display = 'none'; // 画像に入らないように消す
+      msg.style.display = 'block';
+
+      // フォームデータを取得（データログ用）
       const formData = new FormData(form);
       const obj = {};
       for (const [k,v] of formData.entries()) { obj[k] = v; }
-      // record the consent data into jsPsych data
-      jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj });
-      jsPsych.finishTrial();
-    });
+      
+      // 一時的なID生成（この時点ではまだ正式IDがないため）
+      const tempId = obj.kana ? sanitizeFileNamePart(obj.kana) : 'unknown';
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `consent_${tempId}_${timestamp}.png`;
 
-    // initial validation check
-    checkValidity(); 
+      // 4. html2canvasでスクリーンショットを撮影
+      if (typeof html2canvas !== 'undefined') {
+        html2canvas(container).then(canvas => {
+            // 画像をBase64データURLに変換
+            const imgData = canvas.toDataURL('image/png');
+            // "data:image/png;base64," の部分を取り除く
+            const base64Content = imgData.split(',')[1];
+
+            // サーバーへ送信（'explanation'フォルダを指定）
+            saveFileToServer(filename, base64Content, 'explanation', 'image/png', true)
+                .then(() => {
+                    console.log('Consent form image saved.');
+                    jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj, saved_image: true });
+                    jsPsych.finishTrial();
+                })
+                .catch(err => {
+                    console.error('Consent save failed:', err);
+                    alert('同意書の保存に失敗しましたが、実験は継続します。');
+                    jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj, saved_image: false });
+                    jsPsych.finishTrial();
+                });
+        });
+      } else {
+        // ライブラリ読み込み失敗時のフォールバック
+        console.error('html2canvas library not loaded.');
+        jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj, saved_image: false });
+        jsPsych.finishTrial();
+      }
+    });
   }
 };
 
@@ -221,13 +245,20 @@ const withdrawal_info_trial = {
   data: { task_phase: 'withdrawal_info' }
 };
 
-// -------------------- サーバー送信関数 --------------------
-async function saveCsvToServer(filename, csvText) {
+// -------------------- サーバー送信関数（汎用化） --------------------
+// テキスト(CSV)でも画像(Base64)でも送れるように拡張
+async function saveFileToServer(filename, content, folderKey = 'main', contentType = 'text/csv', isBase64 = false) {
   try {
     const response = await fetch('/api/saveToDrive', { // Vercel APIのエンドポイント
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ filename: filename, csv: csvText })
+      body: JSON.stringify({ 
+          filename: filename, 
+          content: content, // CSVテキスト または Base64文字列
+          folderKey: folderKey,
+          contentType: contentType, // 'text/csv' or 'image/png'
+          isBase64: isBase64 
+      })
     });
     if (!response.ok) {
       let errorText = await response.text();
@@ -246,6 +277,11 @@ async function saveCsvToServer(filename, csvText) {
     console.error('結果の保存に失敗しました:', error);
     throw error;
   }
+}
+
+// 互換性のためのラッパー関数（既存コードの修正を最小限にするため）
+async function saveCsvToServer(filename, csvText, folderKey = 'main') {
+    return saveFileToServer(filename, csvText, folderKey, 'text/csv', false);
 }
 
 // -------------------- jsPsychの初期化 --------------------
@@ -276,7 +312,6 @@ const jsPsych = initJsPsych({
         let learning_data_rows = [];
         learning_trials.forEach((trial, index) => {
             const trial_index = index + 1;
-            // 【修正】パスには小文字が含まれる可能性があるため、小文字化して判定する
             const lowerFilename = (trial.image_filename || '').toLowerCase();
             const image_category_correct = lowerFilename.includes('indoor') ? 'indoor' : (lowerFilename.includes('outdoor') ? 'outdoor' : 'N/A');
             const sound_pattern = trial.sound_pattern || 'N/A';

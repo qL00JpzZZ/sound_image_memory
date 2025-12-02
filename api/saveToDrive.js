@@ -1,29 +1,35 @@
-// ファイルパス: api/saveToDrive.js
-
-// ▼▼▼ 構文エラーを修正 (require を import に変更) ▼▼▼
-import * as dotenv from 'dotenv';
-dotenv.config();
-
 import { google } from 'googleapis';
-// ▲▲▲ 修正ここまで ▲▲▲
 
-// Vercelのサーバーレス関数の標準的な形式
 export default async function handler(req, res) {
-  // POSTメソッド以外のリクエストは受け付けないようにする
+  // POSTメソッド以外は拒否
   if (req.method !== 'POST') {
-    res.setHeader('Allow', ['POST']);
-    return res.status(405).end(`Method ${req.method} Not Allowed`);
+    return res.status(405).json({ error: 'Method Not Allowed' });
   }
 
-  // フロントエンドから送られてきたJSONデータを取得
-  const experimentData = req.body;
-
   try {
-    // Google APIの認証情報を設定
+    // データを受け取る（isBase64 フラグを追加）
+    const { filename, content, folderKey, contentType, isBase64 } = req.body;
+
+    // どのフォルダIDを使うか決める
+    let targetFolderId;
+    if (folderKey === 'sub') {
+        targetFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID_SUB;
+    } else if (folderKey === 'explanation') {
+        // ★ 今回追加：同意書保存用のフォルダ
+        targetFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID_explanation;
+    } else {
+        // デフォルト
+        targetFolderId = process.env.GOOGLE_DRIVE_FOLDER_ID;
+    }
+
+    if (!targetFolderId) {
+        throw new Error(`Target folder ID is missing for key: ${folderKey || 'default'}`);
+    }
+
+    // Google認証
     const auth = new google.auth.GoogleAuth({
       credentials: {
         client_email: process.env.GOOGLE_CLIENT_EMAIL,
-        // 環境変数から秘密鍵を読み込む際、改行文字を正しく復元
         private_key: process.env.GOOGLE_PRIVATE_KEY.replace(/\\n/g, '\n'),
       },
       scopes: ['https://www.googleapis.com/auth/drive.file'],
@@ -31,32 +37,29 @@ export default async function handler(req, res) {
 
     const drive = google.drive({ version: 'v3', auth });
 
-    // 保存するファイルの情報（ファイル名、保存先フォルダ）を設定
+    // ファイルのメタデータ
     const fileMetadata = {
-      name: experimentData.filename,
-      parents: [process.env.GOOGLE_DRIVE_FOLDER_ID],
+      name: filename,
+      parents: [targetFolderId],
     };
 
-    // 保存するデータの中身（CSVテキスト）を設定
+    // コンテンツの準備（画像の場合はBase64デコード、テキストの場合はそのまま）
     const media = {
-      mimeType: 'text/csv',
-      body: experimentData.csv,
+      mimeType: contentType || 'text/csv',
+      body: isBase64 ? Buffer.from(content, 'base64') : content,
     };
 
-    // Google Driveにファイルを新規作成
-    await drive.files.create({
+    // アップロード実行
+    const response = await drive.files.create({
       resource: fileMetadata,
       media: media,
       fields: 'id',
-      supportsAllDrives: true,
     });
 
-    // 成功したことをフロントエンドに伝える
-    return res.status(200).json({ message: 'Result saved successfully!' });
+    res.status(200).json({ fileId: response.data.id });
 
   } catch (error) {
-    // エラーが発生した場合、その内容を記録し、フロントエンドにエラーを伝える
-    console.error('Error saving to Google Drive:', error);
-    return res.status(500).json({ error: 'Failed to save result.', details: error.message });
+    console.error('Google Drive Upload Error:', error);
+    res.status(500).json({ error: error.message });
   }
 }
