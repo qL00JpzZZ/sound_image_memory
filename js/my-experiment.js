@@ -128,7 +128,7 @@ const study_description_trial = {
   data: { task_phase: 'study_description' }
 };
 
-// 2) 同意書フォーム（修正版：html2canvas保存対応）
+// 2) 同意書フォーム（修正版：入力フォームの文字切れ修正・スタイル調整）
 const consent_form_html = `
   <div id="consent-container" style="max-width:800px; margin:0 auto; line-height:1.6; text-align:left; font-size:15px; background-color: #ffffff; padding: 40px; border-radius: 5px;">
     <h2 style="text-align:center;">研究参加同意書</h2>
@@ -147,14 +147,18 @@ const consent_form_html = `
       <hr>
       <div style="display:flex; gap:20px; margin-bottom:10px;">
         <div style="flex:1;">
-          <label>フリガナ（必須）<br><input type="text" name="kana" required style="width:100%; padding:5px;"></label>
+          <label>フリガナ（必須）<br>
+            <input type="text" name="kana" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;">
+          </label>
         </div>
         <div style="flex:1;">
-          <label>年齢（必須）<br><input type="number" name="age" min="18" required style="width:50%; padding:5px;"> 歳</label>
+          <label>年齢（必須）<br>
+            <input type="number" name="age" min="18" required style="width:50%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"> 歳
+          </label>
         </div>
         <div style="flex:1;">
           <label>性別（必須）<br>
-            <select name="gender" required style="padding:5px;">
+            <select name="gender" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;">
               <option value="">選択してください</option>
               <option value="male">男</option>
               <option value="female">女</option>
@@ -164,15 +168,19 @@ const consent_form_html = `
         </div>
       </div>
       <div style="margin-bottom:10px;">
-        <label>署名（必須：お名前を入力してください）<br><input type="text" name="signature" required style="width:100%; padding:5px;"></label>
+        <label>署名（必須：お名前を入力してください）<br>
+          <input type="text" name="signature" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;">
+        </label>
       </div>
       <div style="margin-bottom:10px;">
-        <label>Email（必須）<br><input type="email" name="email" required style="width:100%; padding:5px;"></label>
+        <label>Email（必須）<br>
+          <input type="email" name="email" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;">
+        </label>
       </div>
       <p style="font-size:0.9em; text-align:right;">署名日：${new Date().toLocaleDateString()}</p>
       
       <div style="text-align:center; margin-top:20px;">
-        <button type="button" id="btn-consent" style="padding:10px 30px; font-size:1.2em; cursor:pointer;">次へ</button>
+        <button type="button" id="btn-consent" style="padding:10px 30px; font-size:1.2em; cursor:pointer; background-color:#4CAF50; color:white; border:none; border-radius:5px;">次へ</button>
       </div>
     </form>
     <div id="saving-message" style="display:none; text-align:center; color:blue; font-weight:bold; margin-top:10px;">同意書を保存しています...</div>
