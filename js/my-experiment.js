@@ -110,7 +110,7 @@ const study_description_trial = {
           <p style="font-size: 0.9em; margin-bottom: 10px;">
             ※より詳細な手順や連絡先については、下のボタンからPDFをダウンロードしてご確認ください。
           </p>
-          <a href="explanation/explanation.pdf" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: bold;">
+          <a href="explanation/explanation.docx" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: bold;">
             📄 詳細説明書をダウンロード
           </a>
         </div>
@@ -430,6 +430,8 @@ const jsPsych = initJsPsych({
             <div style="max-width: 800px; text-align: center; line-height: 1.6; font-size: 20px;">
                 <h2>実験終了</h2>
                 <p>これで実験は終了です。</p>
+                <p>本実験の本当の目的は画像と音の記憶の関係を調べることでした。</p>
+                <p>音の連続の記憶がいいときに、画像の連続の記憶も良くなるという仮説を実験で検証しています。</p>
                 <p>ありがとうございました！</p>
                 <p>データが確認でき次第、謝礼のお支払いをいたします。</p>
                 <br>
@@ -576,7 +578,7 @@ const instructions_sound_rec = {
     post_trial_gap: 500
 };
 
-// --- 練習用画像リスト ---
+// --- 練習用画像ファイルリスト ---
 const practice_image_files = [
   'practice/scenes/amusementpark.jpg', 'practice/scenes/bar.jpg', 'practice/scenes/barm.jpg',
   'practice/scenes/bedroom.jpg', 'practice/scenes/bridge.jpg', 'practice/scenes/campsite.jpg',
@@ -584,7 +586,8 @@ const practice_image_files = [
   'practice/scenes/studio.jpg'
 ];
 
-// --- 本番用画像・音声リスト ---
+// --- 本番用画像・音声ファイルリスト (省略なし) ---
+// ▼▼▼ 画像リスト (省略なし) ▼▼▼
 const raw_image_files = {
   INDOOR: {
     grocerystore: [ '056_2.jpg', 'idd_supermarche.jpg', '08082003_aisle.jpg', 'int89.jpg', '100-0067_IMG.jpg', 'intDSCF0784_PhotoRedukto.jpg', '1798025006_f8c475b3fd.jpg', 'integral-color4_detail.jpg', '20070831draguenewyorkOK.jpg', 'japanese-food-fruit-stand.jpg', '22184680.jpg', 'kays-1.jpg', '44l.jpg', 'main.jpg', '9d37cca1-088e-4812-a319-9f8d3fcf37a1.jpg', 'market.jpg', 'APRIL242002FakeGroceryStore.jpg', 'mod16b.jpg', 'Grocery Store 1.jpg', 'papas2.jpg', 'Grocery Store 2.jpg', 'safeway_fireworks.jpg', 'Grocery-store-Moscow.jpg', 'shop04.jpg', 'IMG_0104-Takashimaya-fruit.jpg', 'shop12.jpg', 'IMG_0637.jpg', 'shop13.jpg', 'Inside the supermarket.jpg', 'shop14.jpg', 'MG_56_belo grocery 2.jpg', 'shop15.jpg', 'MainFoodStoreProduce1.jpg', 'shop16.jpg', 'Market5.jpg', 'shop17.jpg', 'Modi-in-Ilit-Colonie-Supermarche-1-2.jpg', 'shop18.jpg', 'Picture_22.jpg', 'shop30.jpg', 'ahpf.supermarche02.jpg', 'store.counter.jpg', 'ahpf.supermarche4.jpg', 'super_market.jpg', 'big-Grocery-Store.jpg', 'supermarch_.jpg', 'cbra3.jpg', 'supermarche-1.jpg', 'coffee_sold_supermarket_1.jpg', 'supermarche3-1.jpg', 'courses01.jpg', 'supermarche33-1.jpg', 'duroseshopDM1710_468x527.jpg', 'supermarket.jpg', 'grocery-store-740716-1.jpg', 'supermarket5.jpg', 'grocery.jpg', 'supermarket66.jpg', 'gs-image-Grocery_LEED-09-10.jpg', 'supermarket_rear_case_isles.jpg' ],
@@ -742,6 +745,7 @@ const learning_procedure = {
   choices: ['j', 'k'],
   prompt: '<p style="font-size: 1.2em; text-align: center;"><b>J</b> = 屋内 / <b>K</b> = 屋外</p>',
   stimulus_duration: 1000, // 画像は1秒（1000ms）で消える
+  post_trial_gap: 500, // <--- Added this
   // trial_duration: 1500,    // コメントアウトのまま（キー入力で試行終了）
   data: { image_filename: jsPsych.timelineVariable('image'), sound_pattern: jsPsych.timelineVariable('sound_pattern'), task_phase: 'learning' },
   on_start: function(trial) {
