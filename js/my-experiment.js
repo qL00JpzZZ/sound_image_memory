@@ -696,213 +696,87 @@ for (let i = 0; i < num_sound_test_trials; i++) {
 // タイムラインの構築と実行
 // =========================================================================
 
-// ▼▼▼ preload を分割するための準備 ▼▼▼
-// 1. 全音声と練習画像を ID入力直後に読み込む
-const preload_initial = {
-  type: jsPsychPreload,
-  images: practice_image_files,
-  audio: all_sounds,
-  message: '実験の準備をしています (1/4)...'
-};
+// ▼▼▼ 1. すべてのリソースをリスト化 ▼▼▼
+const all_experiment_images = [
+    ...practice_image_files, 
+    ...learning_images, 
+    ...new_images_for_test
+];
+// 音声は all_sounds に既に入っています
 
-// 2. 学習用画像 (120枚) を分割して読み込む
-// learning_stimuli はオブジェクトの配列なので、画像パスだけ抽出する必要がある
-// ただし、learning_images はパスの配列なのでそのまま使える
-const learning_images_part1 = learning_images.slice(0, 60); // 前半60枚
-const learning_images_part2 = learning_images.slice(60);    // 後半60枚
-
-const preload_learning_1 = {
-  type: jsPsychPreload,
-  images: learning_images_part1,
-  message: '実験の準備をしています (2/4)...'
-};
-
-const preload_learning_2 = {
-  type: jsPsychPreload,
-  images: learning_images_part2,
-  message: '実験の準備をしています (3/4)...'
-};
-
-// 3. テスト用画像 (30枚) をテスト前に読み込む
-const preload_test = {
-    type: jsPsychPreload,
-    images: new_images_for_test,
-    message: '実験の準備をしています (4/4)...'
-};
-// ▲▲▲ 分割準備ここまで ▲▲▲
-
-const practice_selection = jsPsych.randomization.sampleWithoutReplacement(practice_image_files, 3);
-const practice_timeline_variables = practice_selection.map(img_path => { return { image: img_path }; });
-const practice_block = {
-  timeline: [practice_procedure],
-  timeline_variables: practice_timeline_variables,
-  randomize_order: true
-};
-
-const learning_procedure = {
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: function() { return `<div style="width: 800px; min-height: 600px; display: flex; align-items: center; justify-content: center;"><img id="learning_image" src="${jsPsych.timelineVariable('image')}" style="max-width: 100%; max-height: 600px; height: auto;"></div>`; },
-  choices: ['j', 'k'],
-  prompt: '<p style="font-size: 1.2em; text-align: center;"><b>J</b> = 屋内 / <b>K</b> = 屋外</p>',
-  stimulus_duration: 1000, // 画像は1秒（1000ms）で消える
-  post_trial_gap: 500, // <--- Added this
-  // trial_duration: 1500,    // コメントアウトのまま（キー入力で試行終了）
-  data: { image_filename: jsPsych.timelineVariable('image'), sound_pattern: jsPsych.timelineVariable('sound_pattern'), task_phase: 'learning' },
-  on_start: function(trial) {
-    const sound_path = jsPsych.timelineVariable('sound');
-    if (sound_path) { const audio = new Audio(sound_path); audio.play().catch(e => console.error("Learning audio play failed:", e, "Sound path:", sound_path)); }
-    else { console.error("Error: Sound path is undefined for learning trial:", trial.data); }
-  },
-  on_finish: function(data) {
-    // 【修正】ファイル名チェック時に大文字小文字を無視する (toLowerCase)
-    // ファイルパスが "scenes/indoor/..." と小文字でも判定できるように修正
-    const filename = (data.image_filename || '').toLowerCase();
-    let correct_response;
-    if (filename.includes('indoor')) {
-        correct_response = 'j';
-    } else if (filename.includes('outdoor')) {
-        correct_response = 'k';
-    } else {
-        correct_response = null;
+// ▼▼▼ 2. リソースを7分割する関数 ▼▼▼
+function chunkArray(array, parts) {
+    let result = [];
+    for (let i = parts; i > 0; i--) {
+        result.push(array.splice(0, Math.ceil(array.length / i)));
     }
-    if (correct_response) {
-        data.correct = (data.response === correct_response);
-    } else {
-        data.correct = null;
-    }
-  }
-};
+    return result;
+}
 
-const learning_stimuli_part1 = learning_stimuli.slice(0, Math.ceil(learning_stimuli.length / 2));
-const learning_stimuli_part2 = learning_stimuli.slice(Math.ceil(learning_stimuli.length / 2));
-const learning_block_1 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part1, randomize_order: true };
-const learning_block_2 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part2, randomize_order: true };
+// 元の配列を破壊しないようにコピーを作成して分割
+const image_chunks = chunkArray([...all_experiment_images], 7); // 画像を7分割
+const sound_chunks = chunkArray([...all_sounds], 7);           // 音声を7分割
 
-const image_recognition_procedure = {
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: function() { const image_path = jsPsych.timelineVariable('image'); return `<div style="width: 800px; min-height: 600px; display: flex; align-items: center; justify-content: center;"><img src="${image_path}" style="max-width: 100%; max-height: 600px; height: auto;"></div>`; },
-  choices: ['j', 'k'],
-  prompt: `<p style="text-align: center;">この画像は、先ほどの課題フェーズで見ましたか？</p><p style="font-size: 1.2em; text-align: center;"><b>J</b> = はい、見ました / <b>K</b> = いいえ、見ていません</p>`,
-  data: { image_filename: jsPsych.timelineVariable('image'), status: jsPsych.timelineVariable('status'), correct_response: jsPsych.timelineVariable('correct_response'), task_phase: 'image_recognition' },
-  on_finish: function(data) { data.correct = data.response === data.correct_response; }
-};
-const num_img_rec_trials = image_recognition_stimuli.length;
-const img_rec_part_size = Math.ceil(num_img_rec_trials / 3);
-const image_recognition_stimuli_part1 = image_recognition_stimuli.slice(0, img_rec_part_size);
-const image_recognition_stimuli_part2 = image_recognition_stimuli.slice(img_rec_part_size, img_rec_part_size * 2);
-const image_recognition_stimuli_part3 = image_recognition_stimuli.slice(img_rec_part_size * 2);
-const image_recognition_block_1 = { timeline: [image_recognition_procedure], timeline_variables: image_recognition_stimuli_part1, randomize_order: true };
-const image_recognition_block_2 = { timeline: [image_recognition_procedure], timeline_variables: image_recognition_stimuli_part2, randomize_order: true };
-const image_recognition_block_3 = { timeline: [image_recognition_procedure], timeline_variables: image_recognition_stimuli_part3, randomize_order: true };
-
-// --- 音声ペア再認テスト (修正済み) ---
-const sound_recognition_trial = {
-    type: jsPsychHtmlKeyboardResponse,
-    stimulus: '<p style="font-size: 1.5em; text-align: center;">音声を再生します...</p>',
-    choices: "NO_KEYS",
-    prompt: `<p style="font-size: 1.2em; text-align: center;"><b>1つ目のパターンの場合は「J」キー</b></p><p style="font-size: 1.2em; text-align: center;"><b>2つ目のパターンの場合は「K」キー</b></p>`,
-    trial_duration: null,
-    response_ends_trial: true,
-    data: function(){
-        return {
-            old_pair: jsPsych.timelineVariable('old_pair'),
-            new_pair: jsPsych.timelineVariable('new_pair'),
-            presentation_order: jsPsych.timelineVariable('presentation_order'),
-            correct_response: jsPsych.timelineVariable('correct_response'),
-            task_phase: 'sound_recognition'
-        };
-    },
-    on_load: function() {
-        jsPsych.pluginAPI.cancelAllKeyboardResponses();
-        const old_pair = jsPsych.timelineVariable('old_pair');
-        const new_pair = jsPsych.timelineVariable('new_pair');
-        const presentation_order = jsPsych.timelineVariable('presentation_order');
-
-        if (!old_pair || !new_pair || !presentation_order) { console.error("Error: Missing timeline variables in sound_recognition_trial on_load"); jsPsych.finishTrial(); return; }
-        const first_pair_sounds = presentation_order[0] === 'old' ? old_pair : new_pair;
-        const second_pair_sounds = presentation_order[1] === 'old' ? old_pair : new_pair;
-        if (!first_pair_sounds || first_pair_sounds.length < 2 || !second_pair_sounds || second_pair_sounds.length < 2) { console.error("Error: Invalid sound pairs", {old_pair, new_pair, presentation_order}); jsPsych.finishTrial(); return; }
-        const audio1 = new Audio(first_pair_sounds[0]);
-        const audio2 = new Audio(first_pair_sounds[1]);
-        const audio3 = new Audio(second_pair_sounds[0]);
-        const audio4 = new Audio(second_pair_sounds[1]);
-        const display_element = jsPsych.getDisplayElement();
-        const stimulus_div = display_element.querySelector('.jspsych-html-keyboard-response-stimulus');
-        
-        let soundsPlayed = 0;
-        const totalSounds = 4;
-        const enableResponse = () => {
-            if (stimulus_div) stimulus_div.innerHTML = `<p style="text-align: center;">どちらのペアが課題フェーズで聞いたペアでしたか？</p>`;
-             jsPsych.pluginAPI.getKeyboardResponse({
-                 callback_function: (info) => { jsPsych.finishTrial({ rt: info.rt, response: info.key }); },
-                 valid_responses: ['j', 'k'], rt_method: 'performance', persist: false, allow_held_key: false
-             });
-        };
-        const soundEnded = () => {
-            soundsPlayed++;
-            if (soundsPlayed >= totalSounds) { setTimeout(enableResponse, 500); }
-        };
-        audio1.addEventListener('ended', soundEnded); audio2.addEventListener('ended', soundEnded);
-        audio3.addEventListener('ended', soundEnded); audio4.addEventListener('ended', soundEnded);
-        audio1.addEventListener('error', (e) => { console.error("Audio 1 error:", e); soundEnded(); });
-        audio2.addEventListener('error', (e) => { console.error("Audio 2 error:", e); soundEnded(); });
-        audio3.addEventListener('error', (e) => { console.error("Audio 3 error:", e); soundEnded(); });
-        audio4.addEventListener('error', (e) => { console.error("Audio 4 error:", e); soundEnded(); });
-        
-        const play_second_pair = () => {
-            if(stimulus_div) stimulus_div.innerHTML = '<p style="font-size: 1.5em; text-align: center;">2組目...</p>';
-            setTimeout(() => { audio3.play().catch(e => { console.error("Audio 3 play failed:", e); soundEnded(); }); }, 700);
-        };
-        audio1.addEventListener('ended', () => setTimeout(() => audio2.play().catch(e => { console.error("Audio 2 play failed:", e); soundEnded(); }), 100));
-        audio2.addEventListener('ended', play_second_pair);
-        audio3.addEventListener('ended', () => setTimeout(() => audio4.play().catch(e => { console.error("Audio 3 play failed:", e); soundEnded(); }), 100));
-        
-        setTimeout(() => {
-            if(stimulus_div) stimulus_div.innerHTML = '<p style="font-size: 1.5em; text-align: center;">1組目...</p>';
-            audio1.play().catch(e => { console.error("Audio 1 play failed:", e); soundEnded(); });
-        }, 500);
-    },
-    on_finish: function(data) { data.correct = data.response === data.correct_response; }
-};
-const sound_recognition_block = {
-  timeline: [sound_recognition_trial],
-  timeline_variables: sound_2afc_stimuli,
-  randomize_order: true
-};
-
-// --- タイムライン全体の定義 ---
+// ▼▼▼ 3. プレロード試行を作成してタイムラインに追加 ▼▼▼
 const timeline = [];
+
+// ★★★ ここでロード処理（合計14ステップ）を定義 ★★★
+// 画像のロード (7回)
+image_chunks.forEach((chunk, index) => {
+    timeline.push({
+        type: jsPsychPreload,
+        images: chunk,
+        message: `
+            <div style="text-align:center;">
+                <p>実験データを準備しています...</p>
+                <p>画像の読み込み中 (${index + 1}/7)</p>
+                <div style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+            </div>`,
+        max_load_time: 60000,
+        continue_after_error: false // ここで失敗したら止める（リロードしてもらう）
+    });
+});
+
+// 音声のロード (7回)
+sound_chunks.forEach((chunk, index) => {
+    timeline.push({
+        type: jsPsychPreload,
+        audio: chunk,
+        message: `
+            <div style="text-align:center;">
+                <p>実験データを準備しています...</p>
+                <p>音声の読み込み中 (${index + 1}/7)</p>
+                <div style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #e74c3c; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+            </div>`,
+        max_load_time: 60000,
+        continue_after_error: false
+    });
+});
+
+// ▼▼▼ 4. ロード完了後に実験本編を開始 ▼▼▼
+
+// 説明・同意書・ID入力（ロードが終わってから表示されます）
 timeline.push(study_description_trial);
 timeline.push(consent_form_trial);
 timeline.push(withdrawal_info_trial);
 timeline.push(initials_trial);
 
-// ▼ 1. ID入力の直後に音と練習画像を読み込む
-timeline.push(preload_initial);
-
+// 以降のタスク（途中のロードは一切なし）
 timeline.push(instructions_start);
 timeline.push(sound_check_loop_node);
 timeline.push(task_explanation_trial);
 
-// ▼ 2. 練習の前に、学習用画像の前半を読み込んでおく (説明を読んでいる間に完了するかも)
-timeline.push(preload_learning_1);
-
-// 【修正】練習用の教示をタイムラインに追加 (ここが抜けていました)
 timeline.push(practice_instructions_start);
 timeline.push(practice_block);
 timeline.push(practice_instructions_end);
 
 timeline.push(learning_block_1);
-
-// ▼ 3. 休憩中に、学習用画像の後半を読み込む
 timeline.push(learning_break_trial);
-timeline.push(preload_learning_2);
-
 timeline.push(learning_block_2);
 
-// ▼ 4. テストの前に、テスト用画像を読み込む
-timeline.push(instructions_image_rec); // 教示の前に置くか後に置くかはお好みですが、教示後の方が安全
-timeline.push(preload_test);
+timeline.push(instructions_image_rec);
+// ※ preload_test は削除（最初に読み込み済みのため）
 
 timeline.push(image_recognition_block_1);
 timeline.push(image_rec_break_trial);
