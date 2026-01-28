@@ -792,8 +792,8 @@ const practice_block = { timeline: [practice_procedure], timeline_variables: pra
 
 const learning_stimuli_part1 = learning_stimuli.slice(0, Math.ceil(learning_stimuli.length / 2));
 const learning_stimuli_part2 = learning_stimuli.slice(Math.ceil(learning_stimuli.length / 2));
-const learning_block_1 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part1, randomize_order: true };
-const learning_block_2 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part2, randomize_order: true };
+const learning_block_1 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part1, randomize_order: false };
+const learning_block_2 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part2, randomize_order: false };
 
 const image_rec_part_size = Math.ceil(image_recognition_stimuli.length / 3);
 const image_recognition_stimuli_part1 = image_recognition_stimuli.slice(0, image_rec_part_size);
@@ -835,17 +835,18 @@ sound_chunks.forEach((chunk, index) => {
         timeline.push({
             type: jsPsychPreload, 
             audio: chunk,
-            message: `<div style="text-align:center;"><p>実験データを準備しています...</p><p>音声の読み込み中 (${index + 1}/${sound_chunks.length})</p><div style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #e74c3c; border-radius: 50%; animation: spin 1s linear infinite;"></div></div>`,
+            message: `<div style="text-align:center;">
+                <p>実験データを準備しています...</p>
+                <p>音声の読み込み中 (${index + 1}/${sound_chunks.length})</p>
+                <div style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #e74c3c; border-radius: 50%; animation: spin 1s linear infinite;"></div>
+                <p style="font-size: 14px; color: #555; margin-top: 30px;">
+                    読み込みに時間がかかる場合があります。<br>
+                    もしロードが止まったりエラーが出た場合は、ページを再読み込みしてください。<br>
+                    (The experiment failed to load. Please reload the page.)
+                </p>
+            </div>`,
             max_load_time: 60000, 
-            continue_after_error: false,
-            // ★ Added error handling
-            on_error: function(file) {
-                jsPsych.getDisplayElement().innerHTML = `
-                    <div style="text-align:center; padding-top: 50px;">
-                        <p style="color: red; font-size: 24px; font-weight: bold;">The experiment failed to load.</p>
-                        <p style="font-size: 18px;">読み込みに失敗しました。<br>このメッセージが出た場合は、ページを再読み込みしてください。</p>
-                    </div>`;
-            }
+            continue_after_error: false
         });
     }
 });
@@ -874,18 +875,15 @@ image_chunks.forEach((chunk, index) => {
                         <div style="margin: 20px auto; width: 200px; height: 20px; background-color: #ddd; border-radius: 10px; overflow: hidden;">
                           <div style="width: ${((index + 1) / image_chunks.length) * 100}%; height: 100%; background-color: #3498db;"></div>
                         </div>
+                        <p style="font-size: 14px; color: #555; margin-top: 30px;">
+                            読み込みに時間がかかる場合があります。<br>
+                            もしロードが止まったりエラーが出た場合は、ページを再読み込みしてください。<br>
+                            (The experiment failed to load. Please reload the page.)
+                        </p>
                       </div>`,
             show_progress_bar: false, 
             max_load_time: 60000,
             continue_after_error: false,
-            // ★ Added error handling
-            on_error: function(file) {
-                jsPsych.getDisplayElement().innerHTML = `
-                    <div style="text-align:center; padding-top: 50px;">
-                        <p style="color: red; font-size: 24px; font-weight: bold;">The experiment failed to load.</p>
-                        <p style="font-size: 18px;">読み込みに失敗しました。<br>このメッセージが出た場合は、ページを再読み込みしてください。</p>
-                    </div>`;
-            },
             // アクセステスト用のフック (最後のチャンク読み込み完了時にフラグを立てる)
             on_finish: function() {
                 if (index === image_chunks.length - 1) {
@@ -930,4 +928,4 @@ timeline.push(instructions_sound_rec);
 timeline.push(sound_recognition_block);
 
 // 実験実行
-jsPsych.run(timeline);
+jsPsych.run(timeline)
