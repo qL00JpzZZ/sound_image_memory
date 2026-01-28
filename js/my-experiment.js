@@ -226,7 +226,7 @@ const jsPsych = initJsPsych({
   }
 });
 
-// -------------------- 説明・同意・撤回・ID入力 (★ここを復活させました★) --------------------
+// -------------------- 説明・同意・撤回・ID入力 --------------------
 
 // 1) 説明文書
 const study_description_trial = {
@@ -869,7 +869,14 @@ image_chunks.forEach((chunk, index) => {
                       </div>`,
             show_progress_bar: false, 
             max_load_time: 60000,
-            continue_after_error: false 
+            continue_after_error: false,
+            // アクセステスト用のフック (最後のチャンク読み込み完了時にフラグを立てる)
+            on_finish: function() {
+                if (index === image_chunks.length - 1) {
+                    window.__PRELOAD_DONE__ = true;
+                    console.log('PRELOAD DONE');
+                }
+            }
         });
     }
 });
