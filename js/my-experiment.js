@@ -862,7 +862,7 @@ const all_experiment_images = [
 ];
 
 // これを10枚ずつ、約15個の塊に分けます
-const image_chunks = chunkArray(all_experiment_images, 15);
+const image_chunks = chunkArray(all_experiment_images, 30);
 
 image_chunks.forEach((chunk, index) => {
     if (chunk.length > 0) {
