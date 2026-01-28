@@ -792,8 +792,18 @@ const practice_block = { timeline: [practice_procedure], timeline_variables: pra
 
 const learning_stimuli_part1 = learning_stimuli.slice(0, Math.ceil(learning_stimuli.length / 2));
 const learning_stimuli_part2 = learning_stimuli.slice(Math.ceil(learning_stimuli.length / 2));
-const learning_block_1 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part1, randomize_order: true };
-const learning_block_2 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part2, randomize_order: true };
+
+// ★★★ 修正点：randomize_order: false にして、事前作成した順序を維持する ★★★
+const learning_block_1 = { 
+    timeline: [learning_procedure], 
+    timeline_variables: learning_stimuli_part1, 
+    randomize_order: false // ここをfalseにする
+};
+const learning_block_2 = { 
+    timeline: [learning_procedure], 
+    timeline_variables: learning_stimuli_part2, 
+    randomize_order: false // ここをfalseにする
+};
 
 const image_rec_part_size = Math.ceil(image_recognition_stimuli.length / 3);
 const image_recognition_stimuli_part1 = image_recognition_stimuli.slice(0, image_rec_part_size);
