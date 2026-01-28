@@ -1,8 +1,3 @@
-// -------------------- Seed設定 (再現性担保のため追加) --------------------
-const EXP_SEED = Math.random().toString(36).substring(2, 15);
-jsPsych.randomization.setSeed(EXP_SEED);
-// console.log(`Experiment Seed: ${EXP_SEED}`); 
-
 // -------------------- 連絡先・個人情報設定 --------------------
 const STUDY_CONTACT = {
   name: '樋口　洋子',
@@ -11,6 +6,9 @@ const STUDY_CONTACT = {
   phone: '047-478-0107',
   email: 'higuchi.yoko@p.chibakoudai.jp'
 };
+
+// -------------------- グローバル変数定義 --------------------
+let participantInitials = 'unknown';
 
 // -------------------- HELPER FUNCTIONS --------------------
 
@@ -61,6 +59,175 @@ async function saveFileToServer(filename, content, folderKey = 'main', contentTy
 async function saveCsvToServer(filename, csvText, folderKey = 'main') {
     return saveFileToServer(filename, csvText, folderKey, 'text/csv', false);
 }
+
+// -------------------- jsPsych 初期化 --------------------
+// ここで初期化することで、後続のランダム化関数が使えるようになります
+const jsPsych = initJsPsych({
+  on_finish: async function() {
+    jsPsych.getDisplayElement().innerHTML = '<p style="font-size: 20px;">結果を集計・保存しています。しばらくお待ちください...</p>';
+    try {
+        const safeInitials = participantInitials || 'unknown_id';
+        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+        
+        const learning_trials = jsPsych.data.get().filter({ task_phase: 'learning' }).values();
+        const image_rec_trials = jsPsych.data.get().filter({ task_phase: 'image_recognition' }).values();
+        const sound_rec_trials = jsPsych.data.get().filter({ task_phase: 'sound_recognition' }).values();
+
+        // ----------------------------------------------------
+        // 学習フェーズのCSV作成 (Seed列を削除)
+        // ----------------------------------------------------
+        const learning_header = [
+            'participant_initials', 'trial_index', 
+            'image_category_correct', 'sound_pattern', 'pair_id', 'sound_filename', 
+            'image_filename', 'response_key', 'response_category', 'correct', 'rt'
+        ].join(',') + '\n';
+        
+        let learning_data_rows = [];
+        learning_trials.forEach((trial, index) => {
+            const trial_index = index + 1;
+            const lowerFilename = (trial.image_filename || '').toLowerCase();
+            const image_category_correct = lowerFilename.includes('indoor') ? 'indoor' : (lowerFilename.includes('outdoor') ? 'outdoor' : 'N/A');
+            const response_category = trial.response === 'j' ? 'indoor' : (trial.response === 'k' ? 'outdoor' : 'N/A');
+            
+            // 音ファイル名の抽出
+            const soundPath = trial.sound_filename || '';
+            const soundFile = soundPath.split('/').pop() || 'N/A';
+
+            const row = [
+                safeInitials, 
+                trial_index, 
+                image_category_correct, 
+                trial.sound_pattern || 'N/A', 
+                trial.pair_id || 'N/A',      
+                soundFile,                   
+                trial.image_filename || 'N/A', 
+                trial.response || 'N/A', 
+                response_category, 
+                trial.correct, 
+                trial.rt || 'N/A'
+            ].join(',');
+            learning_data_rows.push(row);
+        });
+        const learning_csvData = learning_header + learning_data_rows.join('\n');
+        const learning_filename = `learning_${safeInitials}_${timestamp}.csv`;
+
+        // ----------------------------------------------------
+        // データ集計
+        // ----------------------------------------------------
+        const image_info_map = new Map();
+        learning_trials.forEach(trial => { 
+            if (trial && trial.image_filename) {
+                image_info_map.set(trial.image_filename, {
+                    pattern: trial.sound_pattern,
+                    pair_id: trial.pair_id
+                });
+            }
+        });
+
+        const image_rec_stats = { 'パターンA': { correct: 0, total: 0 }, 'パターンB': { correct: 0, total: 0 }, 'パターンX': { correct: 0, total: 0 } };
+        image_rec_trials.forEach(trial => {
+            if (!trial || trial.status !== 'old') return;
+            const filename = trial.image_filename;
+            if (!filename) return;
+            const info = image_info_map.get(filename);
+            if (info && info.pattern && image_rec_stats[info.pattern]) {
+                image_rec_stats[info.pattern].total++;
+                if (trial.correct === true) image_rec_stats[info.pattern].correct++;
+            }
+        });
+
+        function calculate_accuracy(correct, total) { return total === 0 ? 0 : (correct / total) * 100; }
+        
+        const image_accuracy_A = calculate_accuracy(image_rec_stats['パターンA'].correct, image_rec_stats['パターンA'].total);
+        const image_accuracy_B = calculate_accuracy(image_rec_stats['パターンB'].correct, image_rec_stats['パターンB'].total);
+        const image_accuracy_X = calculate_accuracy(image_rec_stats['パターンX'].correct, image_rec_stats['パターンX'].total); 
+
+        const sound_correct_count = sound_rec_trials.filter(trial => trial && trial.correct === true).length;
+        const sound_accuracy = calculate_accuracy(sound_correct_count, sound_rec_trials.length || 0);
+        
+        // Seed削除
+        const summary_data_string = `${safeInitials},${image_accuracy_A},${image_accuracy_B},${image_accuracy_X},${sound_accuracy}`;
+
+        // ----------------------------------------------------
+        // テストフェーズのCSV作成 (Seed列を削除)
+        // ----------------------------------------------------
+        const test_header = [
+            'participant_initials', 
+            'image_accuracy_A', 'image_accuracy_B', 'image_accuracy_X', 'sound_accuracy', 
+            'trial_index', 'task_phase', 
+            'stimulus_info_1', 'stimulus_info_2', 
+            'original_pattern', 'original_pair_id', 
+            'response_key', 'correct', 'rt', 'status_or_order'
+        ].join(',') + '\n';
+
+        let test_data_rows = [];
+        let test_trial_index = 0;
+
+        // 画像テスト行
+        image_rec_trials.forEach(trial => {
+            test_trial_index++;
+            const info = image_info_map.get(trial.image_filename) || { pattern: 'New', pair_id: 'N/A' };
+            const original_pattern = trial.status === 'new' ? 'New' : (info.pattern || 'N/A');
+            const original_pair = trial.status === 'new' ? 'N/A' : (info.pair_id || 'N/A');
+
+            const row = [
+                summary_data_string, 
+                test_trial_index, 
+                trial.task_phase || 'image_recognition', 
+                trial.image_filename || 'N/A', 
+                'N/A',                         
+                original_pattern,              
+                original_pair,                 
+                trial.response || 'N/A', 
+                trial.correct, 
+                trial.rt || 'N/A', 
+                trial.status || 'N/A'
+            ].join(',');
+            test_data_rows.push(row);
+        });
+
+        // 音声テスト行
+        sound_rec_trials.forEach(trial => {
+            test_trial_index++;
+            const old_pair_files = trial.old_pair ? trial.old_pair.map(p => p.split('/').pop()).join('-') : 'N/A';
+            const new_pair_files = trial.new_pair ? trial.new_pair.map(p => p.split('/').pop()).join('-') : 'N/A';
+            
+            const order = trial.presentation_order; 
+            const first_pair_type = order[0] === 'old' ? 'Correct(Old)' : 'Incorrect(New)';
+            const second_pair_type = order[1] === 'old' ? 'Correct(Old)' : 'Incorrect(New)';
+            
+            const row = [
+                summary_data_string, 
+                test_trial_index, 
+                trial.task_phase || 'sound_recognition', 
+                old_pair_files,  
+                new_pair_files,  
+                'N/A',           
+                'N/A',           
+                trial.response || 'N/A', 
+                trial.correct, 
+                trial.rt || 'N/A', 
+                `${first_pair_type} -> ${second_pair_type}` 
+            ].join(',');
+            test_data_rows.push(row);
+        });
+
+        const test_csvData = test_header + test_data_rows.join('\n');
+        const test_filename = `test_${safeInitials}_${timestamp}.csv`;
+
+        await Promise.all([ saveCsvToServer(learning_filename, learning_csvData), saveCsvToServer(test_filename, test_csvData) ]);
+
+        jsPsych.getDisplayElement().innerHTML = `
+            <div style="max-width: 800px; text-align: center; line-height: 1.6; font-size: 20px;">
+                <h2>実験終了</h2><p>これで実験は終了です。</p><p>ありがとうございました！</p>
+                <p>データが確認でき次第、謝礼のお支払いをいたします。</p><br><p>このウィンドウを閉じて終了してください。</p>
+            </div>`;
+    } catch (e) {
+        console.error('Data saving failed:', e);
+        jsPsych.getDisplayElement().innerHTML = `<div style="text-align: center; max-width: 800px; font-size: 20px;"><h2>エラー</h2><p>結果の保存中にエラーが発生しました。</p><p>詳細: ${e.message}</p></div>`;
+    }
+  }
+});
 
 // -------------------- 説明・同意・撤回・ID入力 --------------------
 
@@ -240,189 +407,6 @@ const initials_trial = {
   }
 };
 
-// -------------------- jsPsych 初期化 & データ保存 --------------------
-let participantInitials = 'unknown';
-
-const jsPsych = initJsPsych({
-  on_finish: async function() {
-    jsPsych.getDisplayElement().innerHTML = '<p style="font-size: 20px;">結果を集計・保存しています。しばらくお待ちください...</p>';
-    try {
-        const safeInitials = participantInitials || 'unknown_id';
-        const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-        
-        const learning_trials = jsPsych.data.get().filter({ task_phase: 'learning' }).values();
-        const image_rec_trials = jsPsych.data.get().filter({ task_phase: 'image_recognition' }).values();
-        const sound_rec_trials = jsPsych.data.get().filter({ task_phase: 'sound_recognition' }).values();
-
-        // ----------------------------------------------------
-        // 学習フェーズのCSV作成 (列追加: sound_filename, pair_id)
-        // ----------------------------------------------------
-        const learning_header = [
-            'participant_initials', 'random_seed', 'trial_index', 
-            'image_category_correct', 'sound_pattern', 'pair_id', 'sound_filename', // ★追加
-            'image_filename', 'response_key', 'response_category', 'correct', 'rt'
-        ].join(',') + '\n';
-        
-        let learning_data_rows = [];
-        learning_trials.forEach((trial, index) => {
-            const trial_index = index + 1;
-            const lowerFilename = (trial.image_filename || '').toLowerCase();
-            const image_category_correct = lowerFilename.includes('indoor') ? 'indoor' : (lowerFilename.includes('outdoor') ? 'outdoor' : 'N/A');
-            const response_category = trial.response === 'j' ? 'indoor' : (trial.response === 'k' ? 'outdoor' : 'N/A');
-            
-            // 音ファイル名の抽出 (パスからファイル名だけ取り出す)
-            const soundPath = trial.sound_filename || '';
-            const soundFile = soundPath.split('/').pop() || 'N/A';
-
-            const row = [
-                safeInitials, 
-                EXP_SEED, 
-                trial_index, 
-                image_category_correct, 
-                trial.sound_pattern || 'N/A', 
-                trial.pair_id || 'N/A',      // ★追加: ペアID (1,2,3 or N/A)
-                soundFile,                   // ★追加: 具体的な音ファイル名
-                trial.image_filename || 'N/A', 
-                trial.response || 'N/A', 
-                response_category, 
-                trial.correct, 
-                trial.rt || 'N/A'
-            ].join(',');
-            learning_data_rows.push(row);
-        });
-        const learning_csvData = learning_header + learning_data_rows.join('\n');
-        const learning_filename = `learning_${safeInitials}_${timestamp}.csv`;
-
-        // ----------------------------------------------------
-        // データ集計 (正答率の四捨五入廃止)
-        // ----------------------------------------------------
-        // マッピング作成: 画像ファイル名 -> 音パターン & ペアID
-        // テストフェーズで「どのパターンだったか」を特定するために使用
-        const image_info_map = new Map();
-        learning_trials.forEach(trial => { 
-            if (trial && trial.image_filename) {
-                image_info_map.set(trial.image_filename, {
-                    pattern: trial.sound_pattern,
-                    pair_id: trial.pair_id
-                });
-            }
-        });
-
-        const image_rec_stats = { 'パターンA': { correct: 0, total: 0 }, 'パターンB': { correct: 0, total: 0 }, 'パターンX': { correct: 0, total: 0 } };
-        image_rec_trials.forEach(trial => {
-            if (!trial || trial.status !== 'old') return;
-            const filename = trial.image_filename;
-            if (!filename) return;
-            const info = image_info_map.get(filename);
-            if (info && info.pattern && image_rec_stats[info.pattern]) {
-                image_rec_stats[info.pattern].total++;
-                if (trial.correct === true) image_rec_stats[info.pattern].correct++;
-            }
-        });
-
-        // ★修正: toPrecision(2) を削除して生の値を出す
-        function calculate_accuracy(correct, total) { return total === 0 ? 0 : (correct / total) * 100; }
-        
-        const image_accuracy_A = calculate_accuracy(image_rec_stats['パターンA'].correct, image_rec_stats['パターンA'].total);
-        const image_accuracy_B = calculate_accuracy(image_rec_stats['パターンB'].correct, image_rec_stats['パターンB'].total);
-        const image_accuracy_X = calculate_percentage(image_rec_stats['パターンX'].correct, image_rec_stats['パターンX'].total); // ここはXなのでそのまま(定義忘れ防止のため以下で定義)
-        function calculate_percentage(c, t) { return t===0 ? 0 : (c/t)*100; } // 互換性のため残す
-
-        const sound_correct_count = sound_rec_trials.filter(trial => trial && trial.correct === true).length;
-        const sound_accuracy = calculate_percentage(sound_correct_count, sound_rec_trials.length || 0);
-        
-        const summary_data_string = `${safeInitials},${EXP_SEED},${image_accuracy_A},${image_accuracy_B},${image_accuracy_X},${sound_accuracy}`;
-
-        // ----------------------------------------------------
-        // テストフェーズのCSV作成 (列追加)
-        // ----------------------------------------------------
-        const test_header = [
-            'participant_initials', 'random_seed', 
-            'image_accuracy_A', 'image_accuracy_B', 'image_accuracy_X', 'sound_accuracy', 
-            'trial_index', 'task_phase', 
-            'stimulus_info_1', 'stimulus_info_2', // 汎用カラムに変更
-            'original_pattern', 'original_pair_id', // ★追加: 元のパターン情報
-            'response_key', 'correct', 'rt', 'status_or_order'
-        ].join(',') + '\n';
-
-        let test_data_rows = [];
-        let test_trial_index = 0;
-
-        // 画像テスト行
-        image_rec_trials.forEach(trial => {
-            test_trial_index++;
-            // 学習時の情報をマップから取得
-            const info = image_info_map.get(trial.image_filename) || { pattern: 'New', pair_id: 'N/A' };
-            const original_pattern = trial.status === 'new' ? 'New' : (info.pattern || 'N/A');
-            const original_pair = trial.status === 'new' ? 'N/A' : (info.pair_id || 'N/A');
-
-            const row = [
-                summary_data_string, 
-                test_trial_index, 
-                trial.task_phase || 'image_recognition', 
-                trial.image_filename || 'N/A', // stimulus_info_1
-                'N/A',                         // stimulus_info_2
-                original_pattern,              // ★追加: 元のパターン(A/B/X/New)
-                original_pair,                 // ★追加: 元のペアID
-                trial.response || 'N/A', 
-                trial.correct, 
-                trial.rt || 'N/A', 
-                trial.status || 'N/A'
-            ].join(',');
-            test_data_rows.push(row);
-        });
-
-        // 音声テスト行 (詳細情報出力)
-        sound_rec_trials.forEach(trial => {
-            test_trial_index++;
-            
-            // 音声ファイル名を抽出
-            const old_pair_files = trial.old_pair ? trial.old_pair.map(p => p.split('/').pop()).join('-') : 'N/A';
-            const new_pair_files = trial.new_pair ? trial.new_pair.map(p => p.split('/').pop()).join('-') : 'N/A';
-            
-            // どちらが先に提示されたか
-            const order = trial.presentation_order; // ['old', 'new'] or ['new', 'old']
-            const first_pair_type = order[0] === 'old' ? 'Correct(Old)' : 'Incorrect(New)';
-            const second_pair_type = order[1] === 'old' ? 'Correct(Old)' : 'Incorrect(New)';
-            
-            // CSV用に情報を整理
-            // stimulus_info_1: 正解ペアの音ファイル名
-            // stimulus_info_2: 不正解ペアの音ファイル名
-            // status_or_order: 提示順 (例: Correct->Incorrect)
-            
-            const row = [
-                summary_data_string, 
-                test_trial_index, 
-                trial.task_phase || 'sound_recognition', 
-                old_pair_files,  // stimulus_info_1 (正解ペア)
-                new_pair_files,  // stimulus_info_2 (不正解ペア)
-                'N/A',           // original_pattern (不要)
-                'N/A',           // original_pair_id (不要)
-                trial.response || 'N/A', 
-                trial.correct, 
-                trial.rt || 'N/A', 
-                `${first_pair_type} -> ${second_pair_type}` // status_or_order (提示順の詳細)
-            ].join(',');
-            test_data_rows.push(row);
-        });
-
-        const test_csvData = test_header + test_data_rows.join('\n');
-        const test_filename = `test_${safeInitials}_${timestamp}.csv`;
-
-        await Promise.all([ saveCsvToServer(learning_filename, learning_csvData), saveCsvToServer(test_filename, test_csvData) ]);
-
-        jsPsych.getDisplayElement().innerHTML = `
-            <div style="max-width: 800px; text-align: center; line-height: 1.6; font-size: 20px;">
-                <h2>実験終了</h2><p>これで実験は終了です。</p><p>ありがとうございました！</p>
-                <p>データが確認でき次第、謝礼のお支払いをいたします。</p><br><p>このウィンドウを閉じて終了してください。</p>
-            </div>`;
-    } catch (e) {
-        console.error('Data saving failed:', e);
-        jsPsych.getDisplayElement().innerHTML = `<div style="text-align: center; max-width: 800px; font-size: 20px;"><h2>エラー</h2><p>結果の保存中にエラーが発生しました。</p><p>詳細: ${e.message}</p></div>`;
-    }
-  }
-});
-
 // -------------------- ファイルリスト定義 --------------------
 // 練習用画像
 const practice_image_files = [
@@ -545,7 +529,6 @@ for (let i = 0; i < NUM_AB_PAIRS; i++) { learned_sound_pairs.push([sounds_for_A[
 
 let base_trial_blocks = [];
 for (let i = 0; i < NUM_AB_PAIRS; i++) { 
-    // ★修正: pair_id をブロック定義に追加 (1, 2, 3)
     base_trial_blocks.push({ 
         type: 'AB_PAIR', 
         sound_A: sounds_for_A[i], 
@@ -554,7 +537,6 @@ for (let i = 0; i < NUM_AB_PAIRS; i++) {
     }); 
 }
 for (let i = 0; i < NUM_X_TRIALS; i++) { 
-    // ★修正: X用のID (例えば 0 または 'X' とする)
     base_trial_blocks.push({ 
         type: 'X_TRIAL', 
         sound_X: sounds_for_X[i],
@@ -585,13 +567,13 @@ learning_images.forEach((img, idx) => {
     }
      if (block_idx >= shuffled_blocks.length) { block_idx = 0; }
     
-    // ★修正: pair_id と sound_filename をデータに含める
+    // dataに pair_id と sound_filename を含める
     learning_stimuli.push({ 
         image: img, 
         sound: sound, 
         sound_pattern: pattern,
         pair_id: pair_id,
-        sound_filename: sound // CSV保存時に使用
+        sound_filename: sound
     });
 });
 
@@ -693,7 +675,6 @@ const learning_procedure = {
   prompt: '<p style="font-size: 1.2em; text-align: center;"><b>J</b> = 屋内 / <b>K</b> = 屋外</p>',
   stimulus_duration: 1000,
   post_trial_gap: 500,
-  // ★修正: dataに pair_id と sound_filename を追加
   data: { 
       image_filename: jsPsych.timelineVariable('image'), 
       sound_pattern: jsPsych.timelineVariable('sound_pattern'), 
@@ -832,14 +813,12 @@ sound_chunks.forEach((chunk, index) => {
 // ---------------------------------------------------------
 // 2. 画像のプリロード（すべて最初にロード！）
 // ---------------------------------------------------------
-// 使う画像すべてを1つのリストにまとめます
 const all_experiment_images = [
     ...practice_image_files,
     ...learning_images,      // 選出された学習用
     ...new_images_for_test   // 選出されたテスト用
 ];
 
-// これを10枚ずつ、約15個の塊に分けます
 const image_chunks = chunkArray(all_experiment_images, 15);
 
 image_chunks.forEach((chunk, index) => {
