@@ -1,3 +1,8 @@
+// -------------------- Seed設定 (再現性担保のため追加) --------------------
+const EXP_SEED = Math.random().toString(36).substring(2, 15);
+jsPsych.randomization.setSeed(EXP_SEED);
+// console.log(`Experiment Seed: ${EXP_SEED}`); 
+
 // -------------------- 連絡先・個人情報設定 --------------------
 const STUDY_CONTACT = {
   name: '樋口　洋子',
@@ -9,13 +14,11 @@ const STUDY_CONTACT = {
 
 // -------------------- HELPER FUNCTIONS --------------------
 
-// ファイル名に使えない文字を置換・削除する
 function sanitizeFileNamePart(s) {
   if (!s) return 'unknown';
   return String(s).trim().replace(/[,\/\\()?%#:*"|<>]/g, '_').replace(/\s+/g, '_').slice(0, 50);
 }
 
-// 999-995を除外して3桁のIDを生成
 const EXCLUDED_NUMS = [999, 998, 997, 996, 995];
 function generateSafe3Digit() {
     let num;
@@ -48,9 +51,7 @@ async function saveFileToServer(filename, content, folderKey = 'main', contentTy
       throw new Error(`Server error: ${response.status} - ${errorJson.error || errorText}`);
     }
     
-    const result = await response.json();
-    console.log('Server response:', result);
-    return result;
+    return await response.json();
   } catch (error) {
     console.error('Save failed:', error);
     throw error;
@@ -253,58 +254,158 @@ const jsPsych = initJsPsych({
         const image_rec_trials = jsPsych.data.get().filter({ task_phase: 'image_recognition' }).values();
         const sound_rec_trials = jsPsych.data.get().filter({ task_phase: 'sound_recognition' }).values();
 
-        // CSV作成ロジック（省略せず記述）
-        const learning_header = ['participant_initials', 'trial_index', 'image_category_correct', 'sound_pattern', 'image_filename', 'response_key', 'response_category', 'correct', 'rt'].join(',') + '\n';
+        // ----------------------------------------------------
+        // 学習フェーズのCSV作成 (列追加: sound_filename, pair_id)
+        // ----------------------------------------------------
+        const learning_header = [
+            'participant_initials', 'random_seed', 'trial_index', 
+            'image_category_correct', 'sound_pattern', 'pair_id', 'sound_filename', // ★追加
+            'image_filename', 'response_key', 'response_category', 'correct', 'rt'
+        ].join(',') + '\n';
+        
         let learning_data_rows = [];
         learning_trials.forEach((trial, index) => {
             const trial_index = index + 1;
             const lowerFilename = (trial.image_filename || '').toLowerCase();
             const image_category_correct = lowerFilename.includes('indoor') ? 'indoor' : (lowerFilename.includes('outdoor') ? 'outdoor' : 'N/A');
             const response_category = trial.response === 'j' ? 'indoor' : (trial.response === 'k' ? 'outdoor' : 'N/A');
-            const row = [safeInitials, trial_index, image_category_correct, trial.sound_pattern || 'N/A', trial.image_filename || 'N/A', trial.response || 'N/A', response_category, trial.correct, trial.rt || 'N/A'].join(',');
+            
+            // 音ファイル名の抽出 (パスからファイル名だけ取り出す)
+            const soundPath = trial.sound_filename || '';
+            const soundFile = soundPath.split('/').pop() || 'N/A';
+
+            const row = [
+                safeInitials, 
+                EXP_SEED, 
+                trial_index, 
+                image_category_correct, 
+                trial.sound_pattern || 'N/A', 
+                trial.pair_id || 'N/A',      // ★追加: ペアID (1,2,3 or N/A)
+                soundFile,                   // ★追加: 具体的な音ファイル名
+                trial.image_filename || 'N/A', 
+                trial.response || 'N/A', 
+                response_category, 
+                trial.correct, 
+                trial.rt || 'N/A'
+            ].join(',');
             learning_data_rows.push(row);
         });
         const learning_csvData = learning_header + learning_data_rows.join('\n');
         const learning_filename = `learning_${safeInitials}_${timestamp}.csv`;
 
-        const image_to_sound_map = new Map();
-        learning_trials.forEach(trial => { if (trial && trial.image_filename && trial.sound_pattern) image_to_sound_map.set(trial.image_filename, trial.sound_pattern); });
+        // ----------------------------------------------------
+        // データ集計 (正答率の四捨五入廃止)
+        // ----------------------------------------------------
+        // マッピング作成: 画像ファイル名 -> 音パターン & ペアID
+        // テストフェーズで「どのパターンだったか」を特定するために使用
+        const image_info_map = new Map();
+        learning_trials.forEach(trial => { 
+            if (trial && trial.image_filename) {
+                image_info_map.set(trial.image_filename, {
+                    pattern: trial.sound_pattern,
+                    pair_id: trial.pair_id
+                });
+            }
+        });
 
         const image_rec_stats = { 'パターンA': { correct: 0, total: 0 }, 'パターンB': { correct: 0, total: 0 }, 'パターンX': { correct: 0, total: 0 } };
         image_rec_trials.forEach(trial => {
             if (!trial || trial.status !== 'old') return;
             const filename = trial.image_filename;
             if (!filename) return;
-            const sound_pattern = image_to_sound_map.get(filename);
-            if (sound_pattern && image_rec_stats[sound_pattern]) {
-                image_rec_stats[sound_pattern].total++;
-                if (trial.correct === true) image_rec_stats[sound_pattern].correct++;
+            const info = image_info_map.get(filename);
+            if (info && info.pattern && image_rec_stats[info.pattern]) {
+                image_rec_stats[info.pattern].total++;
+                if (trial.correct === true) image_rec_stats[info.pattern].correct++;
             }
         });
 
-        function calculate_percentage(correct, total) { return total === 0 ? 0 : parseFloat(((correct / total) * 100).toPrecision(2)); }
-        const image_accuracy_A = calculate_percentage(image_rec_stats['パターンA'].correct, image_rec_stats['パターンA'].total);
-        const image_accuracy_B = calculate_percentage(image_rec_stats['パターンB'].correct, image_rec_stats['パターンB'].total);
-        const image_accuracy_X = calculate_percentage(image_rec_stats['パターンX'].correct, image_rec_stats['パターンX'].total);
+        // ★修正: toPrecision(2) を削除して生の値を出す
+        function calculate_accuracy(correct, total) { return total === 0 ? 0 : (correct / total) * 100; }
+        
+        const image_accuracy_A = calculate_accuracy(image_rec_stats['パターンA'].correct, image_rec_stats['パターンA'].total);
+        const image_accuracy_B = calculate_accuracy(image_rec_stats['パターンB'].correct, image_rec_stats['パターンB'].total);
+        const image_accuracy_X = calculate_percentage(image_rec_stats['パターンX'].correct, image_rec_stats['パターンX'].total); // ここはXなのでそのまま(定義忘れ防止のため以下で定義)
+        function calculate_percentage(c, t) { return t===0 ? 0 : (c/t)*100; } // 互換性のため残す
+
         const sound_correct_count = sound_rec_trials.filter(trial => trial && trial.correct === true).length;
         const sound_accuracy = calculate_percentage(sound_correct_count, sound_rec_trials.length || 0);
-        const summary_data_string = `${safeInitials},${image_accuracy_A},${image_accuracy_B},${image_accuracy_X},${sound_accuracy}`;
+        
+        const summary_data_string = `${safeInitials},${EXP_SEED},${image_accuracy_A},${image_accuracy_B},${image_accuracy_X},${sound_accuracy}`;
 
-        const test_header = ['participant_initials', 'image_accuracy_A', 'image_accuracy_B', 'image_accuracy_X', 'sound_accuracy', 'trial_index', 'task_phase', 'stimulus', 'response_key', 'correct', 'rt', 'image_status_or_sound_order'].join(',') + '\n';
+        // ----------------------------------------------------
+        // テストフェーズのCSV作成 (列追加)
+        // ----------------------------------------------------
+        const test_header = [
+            'participant_initials', 'random_seed', 
+            'image_accuracy_A', 'image_accuracy_B', 'image_accuracy_X', 'sound_accuracy', 
+            'trial_index', 'task_phase', 
+            'stimulus_info_1', 'stimulus_info_2', // 汎用カラムに変更
+            'original_pattern', 'original_pair_id', // ★追加: 元のパターン情報
+            'response_key', 'correct', 'rt', 'status_or_order'
+        ].join(',') + '\n';
+
         let test_data_rows = [];
         let test_trial_index = 0;
+
+        // 画像テスト行
         image_rec_trials.forEach(trial => {
             test_trial_index++;
-            const row = [summary_data_string, test_trial_index, trial.task_phase || 'image_recognition', trial.image_filename || 'N/A', trial.response || 'N/A', trial.correct, trial.rt || 'N/A', trial.status || 'N/A'].join(',');
+            // 学習時の情報をマップから取得
+            const info = image_info_map.get(trial.image_filename) || { pattern: 'New', pair_id: 'N/A' };
+            const original_pattern = trial.status === 'new' ? 'New' : (info.pattern || 'N/A');
+            const original_pair = trial.status === 'new' ? 'N/A' : (info.pair_id || 'N/A');
+
+            const row = [
+                summary_data_string, 
+                test_trial_index, 
+                trial.task_phase || 'image_recognition', 
+                trial.image_filename || 'N/A', // stimulus_info_1
+                'N/A',                         // stimulus_info_2
+                original_pattern,              // ★追加: 元のパターン(A/B/X/New)
+                original_pair,                 // ★追加: 元のペアID
+                trial.response || 'N/A', 
+                trial.correct, 
+                trial.rt || 'N/A', 
+                trial.status || 'N/A'
+            ].join(',');
             test_data_rows.push(row);
         });
+
+        // 音声テスト行 (詳細情報出力)
         sound_rec_trials.forEach(trial => {
             test_trial_index++;
-            const stimulus_str = (trial.old_pair ? trial.old_pair[0]+'+'+trial.old_pair[1] : 'N/A');
-            const order_str = (trial.presentation_order ? trial.presentation_order.join('/') : 'N/A');
-            const row = [summary_data_string, test_trial_index, trial.task_phase || 'sound_recognition', stimulus_str, trial.response || 'N/A', trial.correct, trial.rt || 'N/A', order_str].join(',');
+            
+            // 音声ファイル名を抽出
+            const old_pair_files = trial.old_pair ? trial.old_pair.map(p => p.split('/').pop()).join('-') : 'N/A';
+            const new_pair_files = trial.new_pair ? trial.new_pair.map(p => p.split('/').pop()).join('-') : 'N/A';
+            
+            // どちらが先に提示されたか
+            const order = trial.presentation_order; // ['old', 'new'] or ['new', 'old']
+            const first_pair_type = order[0] === 'old' ? 'Correct(Old)' : 'Incorrect(New)';
+            const second_pair_type = order[1] === 'old' ? 'Correct(Old)' : 'Incorrect(New)';
+            
+            // CSV用に情報を整理
+            // stimulus_info_1: 正解ペアの音ファイル名
+            // stimulus_info_2: 不正解ペアの音ファイル名
+            // status_or_order: 提示順 (例: Correct->Incorrect)
+            
+            const row = [
+                summary_data_string, 
+                test_trial_index, 
+                trial.task_phase || 'sound_recognition', 
+                old_pair_files,  // stimulus_info_1 (正解ペア)
+                new_pair_files,  // stimulus_info_2 (不正解ペア)
+                'N/A',           // original_pattern (不要)
+                'N/A',           // original_pair_id (不要)
+                trial.response || 'N/A', 
+                trial.correct, 
+                trial.rt || 'N/A', 
+                `${first_pair_type} -> ${second_pair_type}` // status_or_order (提示順の詳細)
+            ].join(',');
             test_data_rows.push(row);
         });
+
         const test_csvData = test_header + test_data_rows.join('\n');
         const test_filename = `test_${safeInitials}_${timestamp}.csv`;
 
@@ -355,19 +456,86 @@ const raw_sound_files = [
 ];
 
 // パス生成
-const image_files = { indoor: {}, outdoor: {} };
+const image_files_pool = { indoor: {}, outdoor: {} };
+const all_image_paths_flat = [];
+
 for (const main_cat_key in raw_image_files) {
-  image_files[main_cat_key.toLowerCase()] = {};
+  const main_cat_lower = main_cat_key.toLowerCase();
+  image_files_pool[main_cat_lower] = {};
+  
   for (const sub_cat_key in raw_image_files[main_cat_key]) {
     const path_prefix = `scenes/${main_cat_key}/${sub_cat_key}/`;
-    image_files[main_cat_key.toLowerCase()][sub_cat_key] = raw_image_files[main_cat_key][sub_cat_key].map(filename => path_prefix + filename);
+    const paths = raw_image_files[main_cat_key][sub_cat_key].map(filename => path_prefix + filename);
+    image_files_pool[main_cat_lower][sub_cat_key] = paths;
+    all_image_paths_flat.push(...paths);
   }
 }
 const all_sounds = raw_sound_files.map(filename => `sounds/${filename}`);
 
 // -------------------- 刺激生成ロジック --------------------
+
+// 設定定数
 const NUM_AB_PAIRS = 3;
 const NUM_X_TRIALS = 3;
+const NUM_IMAGES_PER_CATEGORY = 12;
+const NUM_NEW_IMAGES_TOTAL = 30;
+const NUM_DATASET_CANDIDATES = 5;
+
+// カテゴリ定義
+const categories = ['grocerystore', 'library', 'restaurant', 'kitchen', 'gym', 'castle', 'beach', 'forest', 'desert', 'mountain'];
+const main_cats = ['indoor', 'outdoor'];
+
+/**
+ * データセット候補を作成する関数
+ */
+function createStringDataset() {
+    let learning_imgs = [];
+    let used_images_set = new Set();
+
+    // 1. 学習用画像の選出
+    main_cats.forEach(main_cat => {
+        categories.forEach(sub_cat => {
+            if (image_files_pool[main_cat] && image_files_pool[main_cat][sub_cat]) {
+                const sampled_paths = jsPsych.randomization.sampleWithoutReplacement(image_files_pool[main_cat][sub_cat], NUM_IMAGES_PER_CATEGORY);
+                sampled_paths.forEach(path => {
+                    learning_imgs.push(path);
+                    used_images_set.add(path);
+                });
+            }
+        });
+    });
+    learning_imgs = jsPsych.randomization.shuffle(learning_imgs);
+
+    // 2. テスト用新規画像の選出
+    const unused_paths = all_image_paths_flat.filter(path => !used_images_set.has(path));
+    const new_imgs = jsPsych.randomization.sampleWithoutReplacement(unused_paths, NUM_NEW_IMAGES_TOTAL);
+
+    return {
+        learning: learning_imgs,
+        new_test: new_imgs
+    };
+}
+
+// -------------------- データセットの確定 --------------------
+
+// 1. 候補を作成
+const dataset_candidates = [];
+for(let i=0; i<NUM_DATASET_CANDIDATES; i++) {
+    dataset_candidates.push(createStringDataset());
+}
+
+// 2. 選択
+const selected_dataset = jsPsych.randomization.sampleWithoutReplacement(dataset_candidates, 1)[0];
+
+// 3. 展開
+const learning_images = selected_dataset.learning;
+const new_images_for_test = selected_dataset.new_test;
+
+console.log(`Dataset Ready. Learning: ${learning_images.length}, New: ${new_images_for_test.length}`);
+
+
+// -------------------- 音声・刺激のペアリング --------------------
+
 let shuffled_sounds = jsPsych.randomization.shuffle(all_sounds);
 const sounds_for_A = shuffled_sounds.slice(0, NUM_AB_PAIRS);
 const sounds_for_B = shuffled_sounds.slice(NUM_AB_PAIRS, NUM_AB_PAIRS * 2);
@@ -375,23 +543,24 @@ const sounds_for_X = shuffled_sounds.slice(NUM_AB_PAIRS * 2, NUM_AB_PAIRS * 2 + 
 const learned_sound_pairs = [];
 for (let i = 0; i < NUM_AB_PAIRS; i++) { learned_sound_pairs.push([sounds_for_A[i], sounds_for_B[i]]); }
 
-const NUM_IMAGES_PER_CATEGORY = 12;
-let learning_images = [];
-const categories = ['grocerystore', 'library', 'restaurant', 'kitchen', 'gym', 'castle', 'beach', 'forest', 'desert', 'mountain'];
-const main_cats = ['indoor', 'outdoor'];
-main_cats.forEach(main_cat => {
-    categories.forEach(sub_cat => {
-        if (image_files[main_cat] && image_files[main_cat][sub_cat]) {
-            const sampled = jsPsych.randomization.sampleWithoutReplacement(image_files[main_cat][sub_cat], NUM_IMAGES_PER_CATEGORY);
-            learning_images.push(...sampled);
-        } else { console.warn(`Category not found or empty: ${main_cat}/${sub_cat}`); }
-    });
-});
-learning_images = jsPsych.randomization.shuffle(learning_images);
-
 let base_trial_blocks = [];
-for (let i = 0; i < NUM_AB_PAIRS; i++) { base_trial_blocks.push({ type: 'AB_PAIR', sound_A: sounds_for_A[i], sound_B: sounds_for_B[i] }); }
-for (let i = 0; i < NUM_X_TRIALS; i++) { base_trial_blocks.push({ type: 'X_TRIAL', sound_X: sounds_for_X[i] }); }
+for (let i = 0; i < NUM_AB_PAIRS; i++) { 
+    // ★修正: pair_id をブロック定義に追加 (1, 2, 3)
+    base_trial_blocks.push({ 
+        type: 'AB_PAIR', 
+        sound_A: sounds_for_A[i], 
+        sound_B: sounds_for_B[i],
+        pair_id: i + 1 
+    }); 
+}
+for (let i = 0; i < NUM_X_TRIALS; i++) { 
+    // ★修正: X用のID (例えば 0 または 'X' とする)
+    base_trial_blocks.push({ 
+        type: 'X_TRIAL', 
+        sound_X: sounds_for_X[i],
+        pair_id: 'X' + (i + 1)
+    }); 
+}
 
 let repeated_blocks = [];
 const images_per_block = base_trial_blocks.reduce((count, block) => count + (block.type === 'AB_PAIR' ? 2 : 1), 0);
@@ -403,20 +572,28 @@ let block_idx = 0;
 const learning_stimuli = [];
 learning_images.forEach((img, idx) => {
     const current_block = shuffled_blocks[block_idx];
-    let sound, pattern;
+    let sound, pattern, pair_id;
     if (current_block.type === 'AB_PAIR') {
+        pair_id = current_block.pair_id; // (1, 2, 3)
         if (idx % 2 === 0) { sound = current_block.sound_A; pattern = 'パターンA'; }
         else { sound = current_block.sound_B; pattern = 'パターンB'; block_idx++; }
-    } else { sound = current_block.sound_X; pattern = 'パターンX'; block_idx++; }
-     if (block_idx >= shuffled_blocks.length) { block_idx = 0; console.warn("Block index wrapped around."); }
-    learning_stimuli.push({ image: img, sound: sound, sound_pattern: pattern });
+    } else { 
+        pair_id = current_block.pair_id; // (X1, X2...)
+        sound = current_block.sound_X; 
+        pattern = 'パターンX'; 
+        block_idx++; 
+    }
+     if (block_idx >= shuffled_blocks.length) { block_idx = 0; }
+    
+    // ★修正: pair_id と sound_filename をデータに含める
+    learning_stimuli.push({ 
+        image: img, 
+        sound: sound, 
+        sound_pattern: pattern,
+        pair_id: pair_id,
+        sound_filename: sound // CSV保存時に使用
+    });
 });
-
-const all_image_paths_flat = [];
-main_cats.forEach(main_cat => { Object.values(image_files[main_cat]).forEach(arr => all_image_paths_flat.push(...arr)); });
-const unused_images = all_image_paths_flat.filter(img => !learning_images.includes(img));
-const num_new_images = 30;
-const new_images_for_test = jsPsych.randomization.sampleWithoutReplacement(unused_images, num_new_images);
 
 const image_recognition_stimuli = [
   ...learning_images.map(img => ({ image: img, status: 'old', correct_response: 'j' })),
@@ -426,7 +603,7 @@ const image_recognition_stimuli = [
 const TOTAL_SOUNDS_USED = (NUM_AB_PAIRS * 2) + NUM_X_TRIALS;
 const unused_sounds_for_test = shuffled_sounds.slice(TOTAL_SOUNDS_USED);
 const new_sound_pairs = [];
-if (unused_sounds_for_test.length < NUM_AB_PAIRS * 2) { console.error("Not enough unused sounds for sound recognition test."); }
+if (unused_sounds_for_test.length < NUM_AB_PAIRS * 2) { console.error("Not enough unused sounds"); }
 else { for (let i = 0; i < NUM_AB_PAIRS; i++) { new_sound_pairs.push([unused_sounds_for_test[i*2], unused_sounds_for_test[i*2 + 1]]); } }
 const sound_2afc_stimuli = [];
 const shuffled_old_pairs = jsPsych.randomization.shuffle(learned_sound_pairs);
@@ -515,8 +692,15 @@ const learning_procedure = {
   choices: ['j', 'k'],
   prompt: '<p style="font-size: 1.2em; text-align: center;"><b>J</b> = 屋内 / <b>K</b> = 屋外</p>',
   stimulus_duration: 1000,
-  post_trial_gap: 500, // ★0.5秒の遅延★
-  data: { image_filename: jsPsych.timelineVariable('image'), sound_pattern: jsPsych.timelineVariable('sound_pattern'), task_phase: 'learning' },
+  post_trial_gap: 500,
+  // ★修正: dataに pair_id と sound_filename を追加
+  data: { 
+      image_filename: jsPsych.timelineVariable('image'), 
+      sound_pattern: jsPsych.timelineVariable('sound_pattern'), 
+      pair_id: jsPsych.timelineVariable('pair_id'),
+      sound_filename: jsPsych.timelineVariable('sound_filename'),
+      task_phase: 'learning' 
+  },
   on_start: function(trial) {
     const sound_path = jsPsych.timelineVariable('sound');
     if (sound_path) { const audio = new Audio(sound_path); audio.play().catch(e => console.error("Learning audio play failed:", e)); }
@@ -588,7 +772,7 @@ const sound_recognition_trial = {
     on_finish: function(data) { data.correct = data.response === data.correct_response; }
 };
 
-// ブロック定義（変数の定義位置を修正）
+// ブロック定義
 const practice_selection = jsPsych.randomization.sampleWithoutReplacement(practice_image_files, 3);
 const practice_timeline_variables = practice_selection.map(img_path => { return { image: img_path }; });
 const practice_block = { timeline: [practice_procedure], timeline_variables: practice_timeline_variables, randomize_order: true };
@@ -607,44 +791,81 @@ const image_recognition_block_2 = { timeline: [image_recognition_procedure], tim
 const image_recognition_block_3 = { timeline: [image_recognition_procedure], timeline_variables: image_recognition_stimuli_part3, randomize_order: true };
 const sound_recognition_block = { timeline: [sound_recognition_trial], timeline_variables: sound_2afc_stimuli, randomize_order: true };
 
+
 // =========================================================================
-// タイムラインの構築と実行 (分散ロード・最初の一括読み込み)
+// タイムラインの構築と実行 (すべて冒頭でロードする方式)
 // =========================================================================
 
-// リソースの分割
-const all_experiment_images = [...practice_image_files, ...learning_images, ...new_images_for_test];
+// ヘルパー: 配列を分割する関数
 function chunkArray(array, parts) {
     let result = [];
     if (array.length === 0) return result;
-    for (let i = parts; i > 0; i--) { result.push(array.splice(0, Math.ceil(array.length / i))); }
+    const actualParts = Math.min(parts, array.length); 
+    const chunkSize = Math.ceil(array.length / actualParts);
+    for (let i = 0; i < actualParts; i++) {
+        const start = i * chunkSize;
+        const end = start + chunkSize;
+        const chunk = array.slice(start, end);
+        if(chunk.length > 0) result.push(chunk);
+    }
     return result;
 }
-const image_chunks = chunkArray([...all_experiment_images], 7);
-const sound_chunks = chunkArray([...all_sounds], 7);
 
 const timeline = [];
 
-// 1. 分散ロード（画像7回+音声7回）
-image_chunks.forEach((chunk, index) => {
-    if(chunk.length > 0){
-        timeline.push({
-            type: jsPsychPreload, images: chunk,
-            message: `<div style="text-align:center;"><p>実験データを準備しています...</p><p>画像の読み込み中 (${index + 1}/7)</p><div style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite;"></div><style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style></div>`,
-            max_load_time: 60000, continue_after_error: false
-        });
-    }
-});
+// ---------------------------------------------------------
+// 1. 音声のプリロード
+// ---------------------------------------------------------
+const sound_chunks = chunkArray([...all_sounds], 4);
 sound_chunks.forEach((chunk, index) => {
     if(chunk.length > 0){
         timeline.push({
-            type: jsPsychPreload, audio: chunk,
-            message: `<div style="text-align:center;"><p>実験データを準備しています...</p><p>音声の読み込み中 (${index + 1}/7)</p><div style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #e74c3c; border-radius: 50%; animation: spin 1s linear infinite;"></div></div>`,
-            max_load_time: 60000, continue_after_error: false
+            type: jsPsychPreload, 
+            audio: chunk,
+            message: `<div style="text-align:center;"><p>実験データを準備しています...</p><p>音声の読み込み中 (${index + 1}/${sound_chunks.length})</p><div style="margin: 20px auto; width: 40px; height: 40px; border: 4px solid #f3f3f3; border-top: 4px solid #e74c3c; border-radius: 50%; animation: spin 1s linear infinite;"></div></div>`,
+            max_load_time: 60000, 
+            continue_after_error: false
         });
     }
 });
 
-// 2. 実験本編（すべて定義済み変数を使用）
+// ---------------------------------------------------------
+// 2. 画像のプリロード（すべて最初にロード！）
+// ---------------------------------------------------------
+// 使う画像すべてを1つのリストにまとめます
+const all_experiment_images = [
+    ...practice_image_files,
+    ...learning_images,      // 選出された学習用
+    ...new_images_for_test   // 選出されたテスト用
+];
+
+// これを10枚ずつ、約15個の塊に分けます
+const image_chunks = chunkArray(all_experiment_images, 15);
+
+image_chunks.forEach((chunk, index) => {
+    if (chunk.length > 0) {
+        timeline.push({
+            type: jsPsychPreload,
+            images: chunk,
+            message: `<div style="text-align:center;">
+                        <p>実験データを準備しています...</p>
+                        <p>画像の読み込み中 (${index + 1}/${image_chunks.length})</p>
+                        <div style="margin: 20px auto; width: 200px; height: 20px; background-color: #ddd; border-radius: 10px; overflow: hidden;">
+                          <div style="width: ${((index + 1) / image_chunks.length) * 100}%; height: 100%; background-color: #3498db;"></div>
+                        </div>
+                      </div>`,
+            show_progress_bar: false, 
+            max_load_time: 60000,
+            continue_after_error: false 
+        });
+    }
+});
+
+
+// ---------------------------------------------------------
+// 3. 実験本編（すべてロード済みなので、通常のブロック定義でOK）
+// ---------------------------------------------------------
+
 timeline.push(study_description_trial);
 timeline.push(consent_form_trial);
 timeline.push(withdrawal_info_trial);
