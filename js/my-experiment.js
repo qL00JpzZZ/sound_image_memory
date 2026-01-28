@@ -61,7 +61,6 @@ async function saveCsvToServer(filename, csvText, folderKey = 'main') {
 }
 
 // -------------------- jsPsych 初期化 --------------------
-// ここで初期化することで、後続のランダム化関数が使えるようになります
 const jsPsych = initJsPsych({
   on_finish: async function() {
     jsPsych.getDisplayElement().innerHTML = '<p style="font-size: 20px;">結果を集計・保存しています。しばらくお待ちください...</p>';
@@ -74,7 +73,7 @@ const jsPsych = initJsPsych({
         const sound_rec_trials = jsPsych.data.get().filter({ task_phase: 'sound_recognition' }).values();
 
         // ----------------------------------------------------
-        // 学習フェーズのCSV作成 (Seed列を削除)
+        // 学習フェーズのCSV作成
         // ----------------------------------------------------
         const learning_header = [
             'participant_initials', 'trial_index', 
@@ -89,7 +88,6 @@ const jsPsych = initJsPsych({
             const image_category_correct = lowerFilename.includes('indoor') ? 'indoor' : (lowerFilename.includes('outdoor') ? 'outdoor' : 'N/A');
             const response_category = trial.response === 'j' ? 'indoor' : (trial.response === 'k' ? 'outdoor' : 'N/A');
             
-            // 音ファイル名の抽出
             const soundPath = trial.sound_filename || '';
             const soundFile = soundPath.split('/').pop() || 'N/A';
 
@@ -145,11 +143,10 @@ const jsPsych = initJsPsych({
         const sound_correct_count = sound_rec_trials.filter(trial => trial && trial.correct === true).length;
         const sound_accuracy = calculate_accuracy(sound_correct_count, sound_rec_trials.length || 0);
         
-        // Seed削除
         const summary_data_string = `${safeInitials},${image_accuracy_A},${image_accuracy_B},${image_accuracy_X},${sound_accuracy}`;
 
         // ----------------------------------------------------
-        // テストフェーズのCSV作成 (Seed列を削除)
+        // テストフェーズのCSV作成
         // ----------------------------------------------------
         const test_header = [
             'participant_initials', 
@@ -229,184 +226,6 @@ const jsPsych = initJsPsych({
   }
 });
 
-// -------------------- 説明・同意・撤回・ID入力 --------------------
-
-// 1) 説明文書
-const study_description_trial = {
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: function() {
-    return `
-    <div style="max-width: 900px; margin: 0 auto; line-height: 1.6; text-align: left; font-size: 16px;">
-      <div style="margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
-        <h2 style="margin:0; text-align:center;">実験説明書</h2>
-      </div>
-      <div>
-        <p style="text-align: right;"><strong>研究責任者：</strong>${STUDY_CONTACT.affiliation} 助教 ${STUDY_CONTACT.name}</p>
-        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
-          <h3 style="margin-top: 0; font-size: 1.1em; border-bottom: 2px solid #ddd; padding-bottom: 5px;">次ページの同意書署名の前に、以下をご確認ください</h3>
-          <ul style="padding-left: 20px; margin-bottom: 0;">
-            <li style="margin-bottom: 8px;"><strong>【研究目的・方法】</strong><br>画像と音声の記憶・判別課題を行います。所要時間は休憩を含め20分程度です。</li>
-            <li style="margin-bottom: 8px;"><strong>【参加条件】</strong><br><span style="color:red;">18歳以上</span>であり、<span style="color:red;">視力（矯正含む）が0.8以上</span>であることが条件です。</li>
-            <li style="margin-bottom: 8px;"><strong>【自由意思と中断】</strong><br>参加は任意です。実験中いつでも<span style="color:red;">不利益なく中断・同意撤回</span>が可能です。</li>
-            <li style="margin-bottom: 8px;"><strong>【個人情報の保護とデータ公開】</strong><br>個人情報は厳重に管理されます。実験データは個人が特定されない統計データとして処理され、学会発表や<span style="color:red;">公的データベース（Open Science Framework等）で公開</span>される可能性があります。</li>
-            <li style="margin-bottom: 8px;"><strong>【謝礼・交通費・権利】</strong><br>謝礼の支払いは規定に従います。交通費の支給はございません。本実験で得られたデータの知的財産権は参加者には帰属しません。</li>
-          </ul>
-        </div>
-        <div style="margin-top: 20px; text-align: center;">
-          <p style="font-size: 0.9em; margin-bottom: 10px;">※より詳細な手順や連絡先については、下のボタンから説明書をダウンロードしてご確認ください。</p>
-          <a href="explanation/explanation.pdf" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: bold;">📄 詳細説明書をダウンロード</a>
-        </div>
-      </div>
-      <hr style="margin: 20px 0;">
-      <p style="text-align:center; font-size:1.1em; font-weight:bold;">上記の内容および説明書の内容を確認し、理解しましたら<br><span style="color:red; font-size:1.3em;">J キー</span> を押して同意書入力へ進んでください。</p>
-    </div>`;
-  },
-  choices: ['j'],
-  data: { task_phase: 'study_description' }
-};
-
-// 2) 同意書フォーム
-const consent_form_html = `
-  <div id="consent-container" style="max-width:800px; margin:0 auto; line-height:1.6; text-align:left; font-size:15px; background-color: #ffffff; padding: 40px; border-radius: 5px;">
-    <h2 style="text-align:center;">研究参加同意書</h2>
-    <p><strong>${STUDY_CONTACT.affiliation}<br>助教 ${STUDY_CONTACT.name} 殿</strong></p>
-    <p>私は以下の項目について確認し、本研究の参加に同意します。</p>
-    <form id="consent-form" style="border:1px solid #ccc; padding:20px; border-radius:5px; background-color:#fff;">
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check1" required> 研究目的・研究方法</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check2" required> 参加条件（視力0.8以上、18歳以上等）</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check3" required> いつでも実験の中断や参加の同意を撤回できること</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check4" required> 個人情報の保護</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check5" required> 特定の個人を識別できない状態で測定データが公的データベースで公開される可能性があること</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check6" required> 謝礼・交通費</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check7" required> 知的財産の権利が自分にないこと</label></div>
-      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check8" required> その他について</label></div>
-      <hr>
-      <div style="display:flex; gap:20px; margin-bottom:10px;">
-        <div style="flex:1;"><label>フリガナ（必須）<br><input type="text" name="kana" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"></label></div>
-        <div style="flex:1;"><label>年齢（必須）<br><input type="number" name="age" min="18" required style="width:50%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"> 歳</label></div>
-        <div style="flex:1;"><label>性別（必須）<br><select name="gender" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"><option value="">選択してください</option><option value="male">男</option><option value="female">女</option><option value="other">その他/回答しない</option></select></label></div>
-      </div>
-      <div style="margin-bottom:10px;"><label>署名（必須：お名前を入力してください）<br><input type="text" name="signature" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"></label></div>
-      <div style="margin-bottom:10px;"><label>Email（必須）<br><input type="email" name="email" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"></label></div>
-      <p style="font-size:0.9em; text-align:right;">署名日：${new Date().toLocaleDateString()}</p>
-      <div style="text-align:center; margin-top:20px;"><button type="button" id="btn-consent" style="padding:10px 30px; font-size:1.2em; cursor:pointer; background-color:#4CAF50; color:white; border:none; border-radius:5px;">次へ</button></div>
-    </form>
-    <div id="saving-message" style="display:none; text-align:center; color:blue; font-weight:bold; margin-top:10px;">同意書を保存しています...</div>
-  </div>`;
-
-const consent_form_trial = {
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: consent_form_html,
-  choices: "NO_KEYS",
-  data: { task_phase: 'consent_form' },
-  on_load: function() {
-    const script = document.createElement('script');
-    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
-    document.head.appendChild(script);
-
-    const form = document.getElementById('consent-form');
-    const btn = document.getElementById('btn-consent');
-    const container = document.getElementById('consent-container');
-    const msg = document.getElementById('saving-message');
-
-    btn.addEventListener('click', function() {
-      if (!form.checkValidity()) {
-        form.reportValidity();
-        return;
-      }
-      window.scrollTo(0, 0);
-      btn.disabled = true;
-      btn.style.display = 'none';
-      msg.style.display = 'block';
-
-      const formData = new FormData(form);
-      const obj = {};
-      for (const [k,v] of formData.entries()) { obj[k] = v; }
-      
-      const tempId = obj.kana ? sanitizeFileNamePart(obj.kana) : 'unknown';
-      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
-      const filename = `consent_${tempId}_${timestamp}.png`;
-
-      if (typeof html2canvas !== 'undefined') {
-        html2canvas(container, { scale: 2, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, useCORS: true }).then(canvas => {
-            const imgData = canvas.toDataURL('image/png');
-            const base64Content = imgData.split(',')[1];
-            saveFileToServer(filename, base64Content, 'explanation', 'image/png', true)
-                .then(() => {
-                    jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj, saved_image: true });
-                    jsPsych.finishTrial();
-                })
-                .catch(err => {
-                    alert('同意書の保存に失敗しましたが、実験は継続します。');
-                    jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj, saved_image: false });
-                    jsPsych.finishTrial();
-                });
-        });
-      } else {
-        jsPsych.finishTrial();
-      }
-    });
-  }
-};
-
-// 3) 同意撤回連絡先画面
-const withdrawal_info_trial = {
-  type: jsPsychHtmlKeyboardResponse,
-  stimulus: function() {
-    return `
-      <div style="max-width: 800px; margin: 0 auto; line-height: 1.6; text-align: left;">
-        <h2 style="text-align:center;">実験の中断・同意の撤回について</h2>
-        <p>実験への参加は任意です。いつでも実験への参加を中断できます。また実験途中や実験後であっても同意を撤回することができます。同意撤回や実験の中断によって不利な扱いを受けることはありません。</p>
-        <p>同意撤回の意思が示されたときは、学会等の発表前であれば計測データ等は破棄します。</p>
-        <hr>
-        <p>もし実験結果の使用などに同意の撤回をしたい場合は、下記アドレスまで連絡してください。</p>
-        <div style="background-color:#f9f9f9; padding:20px; border-radius:5px; text-align:center;">
-          <p><strong>研究責任者：${STUDY_CONTACT.name}</strong></p>
-          <p>${STUDY_CONTACT.affiliation}</p>
-          <p>${STUDY_CONTACT.address}</p>
-          <p>電話：${STUDY_CONTACT.phone}</p>
-          <p>Email: <a href="mailto:${STUDY_CONTACT.email}">${STUDY_CONTACT.email}</a></p>
-        </div>
-        <hr>
-        <p style="text-align:center; font-size:1.1em; font-weight:bold;">内容を確認しましたら、<span style="color:red;">J キー</span> を押して実験を開始してください。</p>
-      </div>`;
-  },
-  choices: ['j'],
-  data: { task_phase: 'withdrawal_info' }
-};
-
-// 4) ID入力
-const initials_trial = {
-  type: jsPsychSurveyText,
-  questions: [
-    {
-      prompt: `
-        <div style="max-width: 800px; text-align: left; line-height: 1.6; margin-bottom: 20px;">
-            <p>本実験は、画像の認識の速さを測ることが目的です。</p>
-            <p>実験時間は個人差がありますが20分程度です。</p>
-            <p>実験参加に同意していただける場合は以下のフォームに自身のイニシャルを入力してください</p>
-            <hr>
-            <p style="color: red; font-weight: bold;"><br>画像がうまく表示されない場合は、ページを再読み込みしてください。</p>
-            <hr>
-        </div>
-        <p>あなたのイニシャル (例: YT) を入力してください。</p>
-      `,
-      name: "initialsInput",
-      required: true,
-      placeholder: "例: YT"
-    }
-  ],
-  button_label: "IDを生成して開始",
-  on_finish: function(data) {
-    const initials = data.response.initialsInput.toUpperCase();
-    const randomNumber = generateSafe3Digit();
-    const generatedID = initials + randomNumber;
-    participantInitials = generatedID;
-    jsPsych.data.write({ participant_initials: generatedID, task_phase: 'ID_collection' });
-    jsPsych.data.addProperties({ participant_initials: generatedID });
-  }
-};
-
 // -------------------- ファイルリスト定義 --------------------
 // 練習用画像
 const practice_image_files = [
@@ -460,8 +279,9 @@ const all_sounds = raw_sound_files.map(filename => `sounds/${filename}`);
 
 // 設定定数
 const NUM_AB_PAIRS = 3;
-const NUM_X_TRIALS = 3;
-const NUM_IMAGES_PER_CATEGORY = 12;
+const NUM_X_SOUNDS = 6;
+const NUM_X_TRIALS = NUM_X_SOUNDS;
+const NUM_IMAGES_PER_CATEGORY = 12; // 1カテゴリ12枚
 const NUM_NEW_IMAGES_TOTAL = 30;
 const NUM_DATASET_CANDIDATES = 5;
 
@@ -518,63 +338,91 @@ const new_images_for_test = selected_dataset.new_test;
 console.log(`Dataset Ready. Learning: ${learning_images.length}, New: ${new_images_for_test.length}`);
 
 
-// -------------------- 音声・刺激のペアリング --------------------
+// -------------------- 音声・刺激のペアリング (120回完全対応版) --------------------
 
 let shuffled_sounds = jsPsych.randomization.shuffle(all_sounds);
-const sounds_for_A = shuffled_sounds.slice(0, NUM_AB_PAIRS);
-const sounds_for_B = shuffled_sounds.slice(NUM_AB_PAIRS, NUM_AB_PAIRS * 2);
-const sounds_for_X = shuffled_sounds.slice(NUM_AB_PAIRS * 2, NUM_AB_PAIRS * 2 + NUM_X_TRIALS);
+
+// 音の割り当て
+const sounds_for_A = shuffled_sounds.slice(0, NUM_AB_PAIRS); // 3音
+const sounds_for_B = shuffled_sounds.slice(NUM_AB_PAIRS, NUM_AB_PAIRS * 2); // 3音
+const sounds_for_X = shuffled_sounds.slice(NUM_AB_PAIRS * 2, NUM_AB_PAIRS * 2 + NUM_X_SOUNDS); // 6音
+
 const learned_sound_pairs = [];
 for (let i = 0; i < NUM_AB_PAIRS; i++) { learned_sound_pairs.push([sounds_for_A[i], sounds_for_B[i]]); }
 
-let base_trial_blocks = [];
-for (let i = 0; i < NUM_AB_PAIRS; i++) { 
-    base_trial_blocks.push({ 
-        type: 'AB_PAIR', 
-        sound_A: sounds_for_A[i], 
-        sound_B: sounds_for_B[i],
-        pair_id: i + 1 
-    }); 
-}
-for (let i = 0; i < NUM_X_TRIALS; i++) { 
-    base_trial_blocks.push({ 
-        type: 'X_TRIAL', 
-        sound_X: sounds_for_X[i],
-        pair_id: 'X' + (i + 1)
-    }); 
+// ★★★ 重要：120回の試行プールを厳密に作成 ★★★
+// 合計120回 = A:40, B:40, X:40
+// ABペア: 40ペア必要 (3種類を14, 13, 13で配分)
+// X音声: 40回必要 (6種類を7, 7, 7, 7, 6, 6で配分)
+
+let all_blocks = [];
+
+// 1. ABペアブロックの作成 (40個)
+const ab_counts = [14, 13, 13]; // 合計40
+for (let i = 0; i < NUM_AB_PAIRS; i++) {
+    for (let k = 0; k < ab_counts[i]; k++) {
+        all_blocks.push({ 
+            type: 'AB_PAIR', 
+            sound_A: sounds_for_A[i], 
+            sound_B: sounds_for_B[i],
+            pair_id: i + 1 
+        });
+    }
 }
 
-let repeated_blocks = [];
-const images_per_block = base_trial_blocks.reduce((count, block) => count + (block.type === 'AB_PAIR' ? 2 : 1), 0);
-const repeats_needed = Math.ceil(learning_images.length / images_per_block);
-for(let i = 0; i < repeats_needed; i++){ repeated_blocks.push(...base_trial_blocks); }
-let shuffled_blocks = jsPsych.randomization.shuffle(repeated_blocks);
+// 2. X音声ブロックの作成 (40個)
+const x_counts = [7, 7, 7, 7, 6, 6]; // 合計40
+for (let i = 0; i < NUM_X_SOUNDS; i++) {
+    for (let k = 0; k < x_counts[i]; k++) {
+        all_blocks.push({ 
+            type: 'X_TRIAL', 
+            sound_X: sounds_for_X[i],
+            pair_id: 'X' + (i + 1)
+        }); 
+    }
+}
 
-let block_idx = 0;
+// 3. 全ブロックをシャッフル (合計80ブロック = 40ペア+40単独)
+let shuffled_blocks = jsPsych.randomization.shuffle(all_blocks);
+
+// 4. フラット展開 (音の数は 40*2 + 40*1 = 120個 になる)
+const flat_sound_sequence = [];
+shuffled_blocks.forEach(block => {
+    if (block.type === 'AB_PAIR') {
+        flat_sound_sequence.push({ 
+            sound: block.sound_A, 
+            pattern: 'パターンA', 
+            pair_id: block.pair_id 
+        });
+        flat_sound_sequence.push({ 
+            sound: block.sound_B, 
+            pattern: 'パターンB', 
+            pair_id: block.pair_id 
+        });
+    } else {
+        flat_sound_sequence.push({ 
+            sound: block.sound_X, 
+            pattern: 'パターンX', 
+            pair_id: block.pair_id 
+        });
+    }
+});
+
+// 5. 画像と結合 (数は120で完全に一致するはず)
 const learning_stimuli = [];
 learning_images.forEach((img, idx) => {
-    const current_block = shuffled_blocks[block_idx];
-    let sound, pattern, pair_id;
-    if (current_block.type === 'AB_PAIR') {
-        pair_id = current_block.pair_id; // (1, 2, 3)
-        if (idx % 2 === 0) { sound = current_block.sound_A; pattern = 'パターンA'; }
-        else { sound = current_block.sound_B; pattern = 'パターンB'; block_idx++; }
-    } else { 
-        pair_id = current_block.pair_id; // (X1, X2...)
-        sound = current_block.sound_X; 
-        pattern = 'パターンX'; 
-        block_idx++; 
+    if (idx < flat_sound_sequence.length) {
+        const sound_info = flat_sound_sequence[idx];
+        learning_stimuli.push({ 
+            image: img, 
+            sound: sound_info.sound, 
+            sound_pattern: sound_info.pattern,
+            pair_id: sound_info.pair_id,
+            sound_filename: sound_info.sound
+        });
+    } else {
+        console.error("Error: Image count exceeds sound sequence length.");
     }
-     if (block_idx >= shuffled_blocks.length) { block_idx = 0; }
-    
-    // dataに pair_id と sound_filename を含める
-    learning_stimuli.push({ 
-        image: img, 
-        sound: sound, 
-        sound_pattern: pattern,
-        pair_id: pair_id,
-        sound_filename: sound
-    });
 });
 
 const image_recognition_stimuli = [
@@ -582,7 +430,7 @@ const image_recognition_stimuli = [
   ...new_images_for_test.map(img => ({ image: img, status: 'new', correct_response: 'k' }))
 ];
 
-const TOTAL_SOUNDS_USED = (NUM_AB_PAIRS * 2) + NUM_X_TRIALS;
+const TOTAL_SOUNDS_USED = (NUM_AB_PAIRS * 2) + NUM_X_SOUNDS;
 const unused_sounds_for_test = shuffled_sounds.slice(TOTAL_SOUNDS_USED);
 const new_sound_pairs = [];
 if (unused_sounds_for_test.length < NUM_AB_PAIRS * 2) { console.error("Not enough unused sounds"); }
@@ -813,12 +661,14 @@ sound_chunks.forEach((chunk, index) => {
 // ---------------------------------------------------------
 // 2. 画像のプリロード（すべて最初にロード！）
 // ---------------------------------------------------------
+// 使う画像すべてを1つのリストにまとめます
 const all_experiment_images = [
     ...practice_image_files,
     ...learning_images,      // 選出された学習用
     ...new_images_for_test   // 選出されたテスト用
 ];
 
+// これを10枚ずつ、約15個の塊に分けます
 const image_chunks = chunkArray(all_experiment_images, 15);
 
 image_chunks.forEach((chunk, index) => {
