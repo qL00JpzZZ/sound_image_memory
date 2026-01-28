@@ -226,6 +226,184 @@ const jsPsych = initJsPsych({
   }
 });
 
+// -------------------- 説明・同意・撤回・ID入力 (★ここを復活させました★) --------------------
+
+// 1) 説明文書
+const study_description_trial = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: function() {
+    return `
+    <div style="max-width: 900px; margin: 0 auto; line-height: 1.6; text-align: left; font-size: 16px;">
+      <div style="margin-bottom: 20px; border-bottom: 1px solid #ccc; padding-bottom: 10px;">
+        <h2 style="margin:0; text-align:center;">実験説明書</h2>
+      </div>
+      <div>
+        <p style="text-align: right;"><strong>研究責任者：</strong>${STUDY_CONTACT.affiliation} 助教 ${STUDY_CONTACT.name}</p>
+        <div style="background-color: #f9f9f9; padding: 15px; border-radius: 8px; border: 1px solid #eee;">
+          <h3 style="margin-top: 0; font-size: 1.1em; border-bottom: 2px solid #ddd; padding-bottom: 5px;">次ページの同意書署名の前に、以下をご確認ください</h3>
+          <ul style="padding-left: 20px; margin-bottom: 0;">
+            <li style="margin-bottom: 8px;"><strong>【研究目的・方法】</strong><br>画像と音声の記憶・判別課題を行います。所要時間は休憩を含め20分程度です。</li>
+            <li style="margin-bottom: 8px;"><strong>【参加条件】</strong><br><span style="color:red;">18歳以上</span>であり、<span style="color:red;">視力（矯正含む）が0.8以上</span>であることが条件です。</li>
+            <li style="margin-bottom: 8px;"><strong>【自由意思と中断】</strong><br>参加は任意です。実験中いつでも<span style="color:red;">不利益なく中断・同意撤回</span>が可能です。</li>
+            <li style="margin-bottom: 8px;"><strong>【個人情報の保護とデータ公開】</strong><br>個人情報は厳重に管理されます。実験データは個人が特定されない統計データとして処理され、学会発表や<span style="color:red;">公的データベース（Open Science Framework等）で公開</span>される可能性があります。</li>
+            <li style="margin-bottom: 8px;"><strong>【謝礼・交通費・権利】</strong><br>謝礼の支払いは規定に従います。交通費の支給はございません。本実験で得られたデータの知的財産権は参加者には帰属しません。</li>
+          </ul>
+        </div>
+        <div style="margin-top: 20px; text-align: center;">
+          <p style="font-size: 0.9em; margin-bottom: 10px;">※より詳細な手順や連絡先については、下のボタンから説明書をダウンロードしてご確認ください。</p>
+          <a href="explanation/explanation.pdf" target="_blank" rel="noopener noreferrer" style="display: inline-block; background-color: #4CAF50; color: white; padding: 10px 20px; text-decoration: none; border-radius: 5px; font-size: 14px; font-weight: bold;">📄 詳細説明書をダウンロード</a>
+        </div>
+      </div>
+      <hr style="margin: 20px 0;">
+      <p style="text-align:center; font-size:1.1em; font-weight:bold;">上記の内容および説明書の内容を確認し、理解しましたら<br><span style="color:red; font-size:1.3em;">J キー</span> を押して同意書入力へ進んでください。</p>
+    </div>`;
+  },
+  choices: ['j'],
+  data: { task_phase: 'study_description' }
+};
+
+// 2) 同意書フォーム
+const consent_form_html = `
+  <div id="consent-container" style="max-width:800px; margin:0 auto; line-height:1.6; text-align:left; font-size:15px; background-color: #ffffff; padding: 40px; border-radius: 5px;">
+    <h2 style="text-align:center;">研究参加同意書</h2>
+    <p><strong>${STUDY_CONTACT.affiliation}<br>助教 ${STUDY_CONTACT.name} 殿</strong></p>
+    <p>私は以下の項目について確認し、本研究の参加に同意します。</p>
+    <form id="consent-form" style="border:1px solid #ccc; padding:20px; border-radius:5px; background-color:#fff;">
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check1" required> 研究目的・研究方法</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check2" required> 参加条件（視力0.8以上、18歳以上等）</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check3" required> いつでも実験の中断や参加の同意を撤回できること</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check4" required> 個人情報の保護</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check5" required> 特定の個人を識別できない状態で測定データが公的データベースで公開される可能性があること</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check6" required> 謝礼・交通費</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check7" required> 知的財産の権利が自分にないこと</label></div>
+      <div style="margin-bottom: 10px;"><label><input type="checkbox" name="check8" required> その他について</label></div>
+      <hr>
+      <div style="display:flex; gap:20px; margin-bottom:10px;">
+        <div style="flex:1;"><label>フリガナ（必須）<br><input type="text" name="kana" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"></label></div>
+        <div style="flex:1;"><label>年齢（必須）<br><input type="number" name="age" min="18" required style="width:50%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"> 歳</label></div>
+        <div style="flex:1;"><label>性別（必須）<br><select name="gender" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"><option value="">選択してください</option><option value="male">男</option><option value="female">女</option><option value="other">その他/回答しない</option></select></label></div>
+      </div>
+      <div style="margin-bottom:10px;"><label>署名（必須：お名前を入力してください）<br><input type="text" name="signature" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"></label></div>
+      <div style="margin-bottom:10px;"><label>Email（必須）<br><input type="email" name="email" required style="width:100%; padding:10px; margin-top:5px; border:1px solid #ccc; border-radius:4px; font-size:16px; box-sizing: border-box;"></label></div>
+      <p style="font-size:0.9em; text-align:right;">署名日：${new Date().toLocaleDateString()}</p>
+      <div style="text-align:center; margin-top:20px;"><button type="button" id="btn-consent" style="padding:10px 30px; font-size:1.2em; cursor:pointer; background-color:#4CAF50; color:white; border:none; border-radius:5px;">次へ</button></div>
+    </form>
+    <div id="saving-message" style="display:none; text-align:center; color:blue; font-weight:bold; margin-top:10px;">同意書を保存しています...</div>
+  </div>`;
+
+const consent_form_trial = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: consent_form_html,
+  choices: "NO_KEYS",
+  data: { task_phase: 'consent_form' },
+  on_load: function() {
+    const script = document.createElement('script');
+    script.src = "https://cdnjs.cloudflare.com/ajax/libs/html2canvas/1.4.1/html2canvas.min.js";
+    document.head.appendChild(script);
+
+    const form = document.getElementById('consent-form');
+    const btn = document.getElementById('btn-consent');
+    const container = document.getElementById('consent-container');
+    const msg = document.getElementById('saving-message');
+
+    btn.addEventListener('click', function() {
+      if (!form.checkValidity()) {
+        form.reportValidity();
+        return;
+      }
+      window.scrollTo(0, 0);
+      btn.disabled = true;
+      btn.style.display = 'none';
+      msg.style.display = 'block';
+
+      const formData = new FormData(form);
+      const obj = {};
+      for (const [k,v] of formData.entries()) { obj[k] = v; }
+      
+      const tempId = obj.kana ? sanitizeFileNamePart(obj.kana) : 'unknown';
+      const timestamp = new Date().toISOString().replace(/[:.]/g, '-');
+      const filename = `consent_${tempId}_${timestamp}.png`;
+
+      if (typeof html2canvas !== 'undefined') {
+        html2canvas(container, { scale: 2, backgroundColor: '#ffffff', scrollX: 0, scrollY: 0, useCORS: true }).then(canvas => {
+            const imgData = canvas.toDataURL('image/png');
+            const base64Content = imgData.split(',')[1];
+            saveFileToServer(filename, base64Content, 'explanation', 'image/png', true)
+                .then(() => {
+                    jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj, saved_image: true });
+                    jsPsych.finishTrial();
+                })
+                .catch(err => {
+                    alert('同意書の保存に失敗しましたが、実験は継続します。');
+                    jsPsych.data.write({ task_phase: 'consent_form', consent: true, consent_data: obj, saved_image: false });
+                    jsPsych.finishTrial();
+                });
+        });
+      } else {
+        jsPsych.finishTrial();
+      }
+    });
+  }
+};
+
+// 3) 同意撤回連絡先画面
+const withdrawal_info_trial = {
+  type: jsPsychHtmlKeyboardResponse,
+  stimulus: function() {
+    return `
+      <div style="max-width: 800px; margin: 0 auto; line-height: 1.6; text-align: left;">
+        <h2 style="text-align:center;">実験の中断・同意の撤回について</h2>
+        <p>実験への参加は任意です。いつでも実験への参加を中断できます。また実験途中や実験後であっても同意を撤回することができます。同意撤回や実験の中断によって不利な扱いを受けることはありません。</p>
+        <p>同意撤回の意思が示されたときは、学会等の発表前であれば計測データ等は破棄します。</p>
+        <hr>
+        <p>もし実験結果の使用などに同意の撤回をしたい場合は、下記アドレスまで連絡してください。</p>
+        <div style="background-color:#f9f9f9; padding:20px; border-radius:5px; text-align:center;">
+          <p><strong>研究責任者：${STUDY_CONTACT.name}</strong></p>
+          <p>${STUDY_CONTACT.affiliation}</p>
+          <p>${STUDY_CONTACT.address}</p>
+          <p>電話：${STUDY_CONTACT.phone}</p>
+          <p>Email: <a href="mailto:${STUDY_CONTACT.email}">${STUDY_CONTACT.email}</a></p>
+        </div>
+        <hr>
+        <p style="text-align:center; font-size:1.1em; font-weight:bold;">内容を確認しましたら、<span style="color:red;">J キー</span> を押して実験を開始してください。</p>
+      </div>`;
+  },
+  choices: ['j'],
+  data: { task_phase: 'withdrawal_info' }
+};
+
+// 4) ID入力
+const initials_trial = {
+  type: jsPsychSurveyText,
+  questions: [
+    {
+      prompt: `
+        <div style="max-width: 800px; text-align: left; line-height: 1.6; margin-bottom: 20px;">
+            <p>本実験は、画像の認識の速さを測ることが目的です。</p>
+            <p>実験時間は個人差がありますが20分程度です。</p>
+            <p>実験参加に同意していただける場合は以下のフォームに自身のイニシャルを入力してください</p>
+            <hr>
+            <p style="color: red; font-weight: bold;"><br>画像がうまく表示されない場合は、ページを再読み込みしてください。</p>
+            <hr>
+        </div>
+        <p>あなたのイニシャル (例: YT) を入力してください。</p>
+      `,
+      name: "initialsInput",
+      required: true,
+      placeholder: "例: YT"
+    }
+  ],
+  button_label: "IDを生成して開始",
+  on_finish: function(data) {
+    const initials = data.response.initialsInput.toUpperCase();
+    const randomNumber = generateSafe3Digit();
+    const generatedID = initials + randomNumber;
+    participantInitials = generatedID;
+    jsPsych.data.write({ participant_initials: generatedID, task_phase: 'ID_collection' });
+    jsPsych.data.addProperties({ participant_initials: generatedID });
+  }
+};
+
 // -------------------- ファイルリスト定義 --------------------
 // 練習用画像
 const practice_image_files = [
@@ -617,9 +795,10 @@ const learning_stimuli_part2 = learning_stimuli.slice(Math.ceil(learning_stimuli
 const learning_block_1 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part1, randomize_order: true };
 const learning_block_2 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part2, randomize_order: true };
 
-const image_recognition_stimuli_part1 = image_recognition_stimuli.slice(0, 50);
-const image_recognition_stimuli_part2 = image_recognition_stimuli.slice(50, 100);
-const image_recognition_stimuli_part3 = image_recognition_stimuli.slice(100);
+const image_rec_part_size = Math.ceil(image_recognition_stimuli.length / 3);
+const image_recognition_stimuli_part1 = image_recognition_stimuli.slice(0, image_rec_part_size);
+const image_recognition_stimuli_part2 = image_recognition_stimuli.slice(image_rec_part_size, image_rec_part_size * 2);
+const image_recognition_stimuli_part3 = image_recognition_stimuli.slice(image_rec_part_size * 2);
 const image_recognition_block_1 = { timeline: [image_recognition_procedure], timeline_variables: image_recognition_stimuli_part1, randomize_order: true };
 const image_recognition_block_2 = { timeline: [image_recognition_procedure], timeline_variables: image_recognition_stimuli_part2, randomize_order: true };
 const image_recognition_block_3 = { timeline: [image_recognition_procedure], timeline_variables: image_recognition_stimuli_part3, randomize_order: true };
