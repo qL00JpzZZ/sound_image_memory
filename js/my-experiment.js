@@ -285,8 +285,11 @@ const NUM_IMAGES_PER_CATEGORY = 12; // 1カテゴリ12枚
 const NUM_NEW_IMAGES_TOTAL = 30;
 const NUM_DATASET_CANDIDATES = 5;
 
-// カテゴリ定義
-const categories = ['grocerystore', 'library', 'restaurant', 'kitchen', 'gym', 'castle', 'beach', 'forest', 'desert', 'mountain'];
+// カテゴリ定義 (★修正: 明示的に構造化)
+const categories = {
+  indoor: ['grocerystore', 'library', 'restaurant', 'kitchen', 'gym'],
+  outdoor: ['castle', 'beach', 'forest', 'desert', 'mountain']
+};
 const main_cats = ['indoor', 'outdoor'];
 
 /**
@@ -298,8 +301,10 @@ function createStringDataset() {
 
     // 1. 学習用画像の選出
     main_cats.forEach(main_cat => {
-        categories.forEach(sub_cat => {
-            if (image_files_pool[main_cat] && image_files_pool[main_cat][sub_cat]) {
+        // ★修正: 対応するサブカテゴリだけを回す
+        const sub_cats = categories[main_cat];
+        sub_cats.forEach(sub_cat => {
+             if (image_files_pool[main_cat] && image_files_pool[main_cat][sub_cat]) {
                 const sampled_paths = jsPsych.randomization.sampleWithoutReplacement(image_files_pool[main_cat][sub_cat], NUM_IMAGES_PER_CATEGORY);
                 sampled_paths.forEach(path => {
                     learning_imgs.push(path);
@@ -335,6 +340,7 @@ const selected_dataset = jsPsych.randomization.sampleWithoutReplacement(dataset_
 const learning_images = selected_dataset.learning;
 const new_images_for_test = selected_dataset.new_test;
 
+// デバッグ: 枚数確認 (学習120枚, テスト30枚)
 console.log(`Dataset Ready. Learning: ${learning_images.length}, New: ${new_images_for_test.length}`);
 
 
@@ -611,10 +617,9 @@ const learning_stimuli_part2 = learning_stimuli.slice(Math.ceil(learning_stimuli
 const learning_block_1 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part1, randomize_order: true };
 const learning_block_2 = { timeline: [learning_procedure], timeline_variables: learning_stimuli_part2, randomize_order: true };
 
-const image_rec_part_size = Math.ceil(image_recognition_stimuli.length / 3);
-const image_recognition_stimuli_part1 = image_recognition_stimuli.slice(0, image_rec_part_size);
-const image_recognition_stimuli_part2 = image_recognition_stimuli.slice(image_rec_part_size, image_rec_part_size * 2);
-const image_recognition_stimuli_part3 = image_recognition_stimuli.slice(image_rec_part_size * 2);
+const image_recognition_stimuli_part1 = image_recognition_stimuli.slice(0, 50);
+const image_recognition_stimuli_part2 = image_recognition_stimuli.slice(50, 100);
+const image_recognition_stimuli_part3 = image_recognition_stimuli.slice(100);
 const image_recognition_block_1 = { timeline: [image_recognition_procedure], timeline_variables: image_recognition_stimuli_part1, randomize_order: true };
 const image_recognition_block_2 = { timeline: [image_recognition_procedure], timeline_variables: image_recognition_stimuli_part2, randomize_order: true };
 const image_recognition_block_3 = { timeline: [image_recognition_procedure], timeline_variables: image_recognition_stimuli_part3, randomize_order: true };
